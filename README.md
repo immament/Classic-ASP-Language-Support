@@ -1,12 +1,12 @@
 <!-- Refer to https://github.com/catppuccin/vscode/blob/main/README.md?plain=1 -->
 
 <h3 align="center">
-	<img src="icon.png" alt="Classic ASP Language Support Logo" width="100" height="100"><br>
+	<img src="images/icon.png" alt="Classic ASP Language Support Logo" width="100" height="100"><br>
 	Classic ASP Language Support for <a href="https://code.visualstudio.com">VSCode</a><br>
     <img src="https://raw.githubusercontent.com/catppuccin/catppuccin/main/assets/misc/transparent.png" height="30" width="0px"/>
     
-[![Version](https://img.shields.io/visual-studio-marketplace/v/ashtonckj.classic-asp-language-support?style=for-the-badge&color=5D4E99&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
-[![Downloads](https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&color=7C3AED)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
+[![Version](https://img.shields.io/visual-studio-marketplace/v/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=b7bdf8&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
+[![Downloads](https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=8aadf4)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
     <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge"></a>
     <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
 </h3>
@@ -14,7 +14,7 @@
 ---
 
 <h4 align="center">
-    *"Finally, a formatter that understands Classic ASP! This extension has made maintaining legacy codebases so much easier."*
+    <em>"Finally, a formatter that understands Classic ASP! This extension has made maintaining legacy codebases so much easier."</em>
 </h4>
 
 ---
