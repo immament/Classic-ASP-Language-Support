@@ -7,16 +7,19 @@
     
 [![Version](https://img.shields.io/visual-studio-marketplace/v/ashtonckj.classic-asp-language-support?style=for-the-badge&color=5D4E99&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&color=7C3AED)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
-[![Rating](https://img.shields.io/visual-studio-marketplace/r/ashtonckj.classic-asp-language-support?style=for-the-badge&color=8B5CF6)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
-[![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&color=A78BFA)](LICENSE)
-
----
-
-*"Finally, a formatter that understands Classic ASP! This extension has made maintaining legacy codebases so much easier."*
-
----
-
+    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge"></a>
+    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
 </h3>
+
+---
+
+<h4 align="center">
+    *"Finally, a formatter that understands Classic ASP! This extension has made maintaining legacy codebases so much easier."*
+</h4>
+
+---
+
+
 
 ## ✨ What's Inside
 
@@ -67,19 +70,6 @@
 
 <br>
 
-### 💡 IntelliSense in Action
-<!-- PLACEHOLDER: Add GIF showing IntelliSense auto-completion -->
-<!-- ![IntelliSense Demo](images/intellisense-demo.gif) -->
-<details>
-<summary>📝 <b>What you'll see in this demo</b></summary>
-
-- Auto-completion for Response, Request, Server objects
-- HTML tag and attribute suggestions
-- VBScript keyword completion
-</details>
-
-<br>
-
 ### 📋 Snippets Quick Insert
 <!-- PLACEHOLDER: Add GIF showing snippet usage -->
 <!-- ![Snippets Demo](images/snippets-demo.gif) -->
@@ -106,24 +96,11 @@
 
 ---
 
-## 🚀 Quick Start
+### 🚀 Installation
+1. Install from VS Code Extensions Marketplace (search for "Classic ASP Language Support")
+2. Or install from `.vsix` file: Extensions → Install from VSIX
 
-### Installation
-
-**From VS Code Marketplace** (Recommended)
-```
-1. Open VS Code
-2. Press Ctrl+P (Cmd+P on Mac)
-3. Type: ext install ashtonckj.classic-asp-language-support
-4. Press Enter
-```
-
-**From VSIX File**
-```
-1. Download the .vsix file
-2. Open VS Code
-3. Extensions → ⋯ → Install from VSIX
-```
+---
 
 ### Usage
 
