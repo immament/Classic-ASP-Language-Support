@@ -5,6 +5,22 @@ All notable changes to the "Classic ASP Language Support" extension will be docu
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2025-02-02
+
+### ✨ Added
+- **Added colours for advanced SQL syntaxes** - Enhanced syntax highlighting for advanced SQL patterns and keywords ([#11](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/11))
+- **Added toggleable SQL highlighting setting** - New `aspLanguageSupport.enableSQLHighlighting` setting to show or hide SQL colours in VBScript strings (default: `true`) ([#12](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/12))
+
+---
+
+## [0.2.4] - 2025-02-02
+
+### 🛠️ Fixed
+- **Fixed inline ASP delimiter handling** - `<% %>` delimiters now stay on the same line with code instead of being incorrectly removed in multi-line code ([#6](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/6))
+- **Fixed inconsistent VBScript method colours** - VBScript functions and methods now have consistent syntax colouring ([#8](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/8))
+
+---
+
 ## [0.2.3] - 2025-02-01
 
 ### 🛠️ Fixed
