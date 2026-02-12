@@ -1,47 +1,135 @@
-# Classic ASP Language Support
+<!-- Refer to https://github.com/catppuccin/vscode/blob/main/README.md?plain=1 -->
 
-Complete language support for Classic ASP files with formatting, IntelliSense, snippets, and syntax highlighting for VBScript, HTML, CSS, and JavaScript.
+<h3 align="center">
+	<img src="images/icon.png" alt="Classic ASP Language Support Logo" width="100" height="100"><br>
+	Classic ASP Language Support for <a href="https://code.visualstudio.com">VSCode</a><br>
+    <img src="https://raw.githubusercontent.com/catppuccin/catppuccin/main/assets/misc/transparent.png" height="30" width="0px"/>
+    
+[![Version](https://img.shields.io/visual-studio-marketplace/v/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=b7bdf8&logo=visual-studio-code&cacheSeconds=3600)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
+[![Downloads](https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=8aadf4&cacheSeconds=3600)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
+    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge&cacheSeconds=3600"></a>
+    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8&cacheSeconds=3600"/></a>
+</h3>
 
-## ✨ Features
+---
 
-### 🎨 Multi-Language Formatting
-- **VBScript**: Smart indentation for all control structures (If/For/While/Select Case/Sub/Function)
-- **HTML/CSS/JavaScript**: Professional formatting powered by Prettier
-- **SQL**: Proper indentation for SQL queries inside ASP strings
-- **Customisable keyword casing**: Choose lowercase, UPPERCASE, or PascalCase for VBScript keywords
-- **Automatic operator spacing**: Adds proper spacing around operators (`=`, `+`, `&`, etc.)
-- **Multi-block support**: Handles If/Else/Loops that span across multiple `<% %>` blocks
-- **Inline ASP support**: Formats ASP expressions in HTML attributes (e.g., `<div class="<%= className %>">`)
+<h4 align="center">
+    <em>"Finally, a formatter that understands Classic ASP! This extension has made maintaining legacy codebases so much easier."</em>
+</h4>
 
+---
 
-### 💡 IntelliSense & Auto-Completion
-- **HTML**: Tag and attribute suggestions with smart auto-closing
-- **CSS**: Property completion inside `<style>` tags
-- **JavaScript**: Keyword and object completion inside `<script>` tags
-- **ASP/VBScript**: Response, Request, Server, Session, Application objects and VBScript keywords
+## ✨ What's Inside
 
-### 📝 Snippets
-- Pre-built snippets for HTML, ASP, and JavaScript patterns
-- Quick insertion for common structures (loops, conditionals, database connections)
+<table>
+    <tr>
+        <td width="33%" align="center" valign="top">
+            <h3>🎨 Smart Formatting</h3>
+            <p>Multi-language formatting for VBScript, HTML, CSS, and JavaScript with customisable keyword casing</p>
+            <p></p>
+        </td>
+        <td width="33%" align="center" valign="top">
+            <h3>🌈 Syntax Highlighting</h3>
+            <p>Beautiful, theme-compatible syntax colouring for ASP regions and SQL queries</p>
+            <p></p>
+        </td>
+        <td width="33%" align="center" valign="top">
+            <h3>💡 IntelliSense</h3>
+            <p>Auto-completion for ASP objects, VBScript keywords, HTML, CSS, and JavaScript</p>
+            <p></p>
+        </td>
+    </tr>
+</table>
+
+---
+
+## 📸 See It In Action
+
+### 🎨 Formatting Before & After
+<!-- PLACEHOLDER: Add GIF showing messy ASP code being formatted -->
+<!-- ![Formatting Demo](images/formatting-demo.gif) -->
+<details>
+<summary>📝 <b>What you'll see in this demo</b></summary>
+
+- Unformatted ASP code with inconsistent indentation
+- One-click formatting with `Alt + Shift + F`
+- Clean, properly indented VBScript, HTML, and inline ASP
+</details>
+
+<br>
 
 ### 🌈 Syntax Highlighting
-- ASP region highlighting with customisable colours (compatible with all VS Code themes)
-- Comprehensive SQL syntax colouring with advanced syntax support (keywords, functions, data types, operators, parameters) - toggleable
-- Toggleable region highlighting for `<% %>` blocks
+<!-- PLACEHOLDER: Add GIF showing syntax highlighting for ASP regions and SQL -->
+<!-- ![Syntax Highlighting Demo](images/syntax-demo.gif) -->
+<details>
+<summary>📝 <b>What you'll see in this demo</b></summary>
+
+- ASP region highlighting with customisable background colours
+- SQL syntax colouring inside VBScript strings
+- Theme compatibility (light and dark modes)
+</details>
+
+<br>
+
+### 📋 Snippets Quick Insert
+<!-- PLACEHOLDER: Add GIF showing snippet usage -->
+<!-- ![Snippets Demo](images/snippets-demo.gif) -->
+<details>
+<summary>📝 <b>What you'll see in this demo</b></summary>
+
+- Quick insertion of common ASP patterns
+- Database connection templates
+- Loop and conditional structures
+</details>
+
+<br>
+
+### ⚙️ Multi-Block Formatting
+<!-- PLACEHOLDER: Add GIF showing complex multi-block ASP formatting -->
+<!-- ![Multi-Block Demo](images/multiblock-demo.gif) -->
+<details>
+<summary>📝 <b>What you'll see in this demo</b></summary>
+
+- If/Else/Loop structures spanning multiple `<% %>` blocks
+- Inline ASP expressions in HTML attributes
+- Complex mixed HTML/ASP structures
+</details>
+
+---
 
 ## 🚀 Installation
 
 1. Install from VS Code Extensions Marketplace (search for "Classic ASP Language Support")
 2. Or install from `.vsix` file: Extensions → Install from VSIX
 
+---
+
 ## 📖 Usage
 
-- **Format code**: `Alt + Shift + F` (Windows/Linux) or `Option + Shift + F` (Mac)
-- **Trigger IntelliSense**: Start typing or press `Ctrl + Space`
-- **Use snippets**: Type snippet prefix and press `Tab`
+| Action | Shortcut |
+|--------|----------|
+| **Format Document** | `Alt + Shift + F` (Windows/Linux)<br>`Option + Shift + F` (Mac) |
+| **Trigger IntelliSense** | Start typing or `Ctrl + Space` |
+| **Insert Snippet** | Type prefix and press `Tab` |
 
-### Before:
+---
+
+## 🎯 Key Features
+
+<details open>
+<summary><strong>🎨 Multi-Language Formatting</strong></summary>
+
+- ✅ **VBScript**: Smart indentation for all control structures (If/For/While/Select Case/Sub/Function)
+- ✅ **HTML/CSS/JavaScript**: Professional formatting powered by Prettier
+- ✅ **SQL**: Proper indentation for SQL queries inside ASP strings
+- ✅ **Customisable keyword casing**: Choose lowercase, UPPERCASE, or PascalCase
+- ✅ **Automatic operator spacing**: Proper spacing around `=`, `+`, `&`, etc.
+- ✅ **Multi-block support**: Handles structures that span across multiple `<% %>` blocks
+- ✅ **Inline ASP support**: Formats ASP expressions in HTML attributes
+
+**Example:**
 ```asp
+<!-- Before -->
 <!DOCTYPE html><html><body>
 <div><h1>Welcome <%=username%>!</h1>
 <%
@@ -52,10 +140,8 @@ response.write("adult")
 end if
 %>
 </div></body></html>
-```
 
-### After:
-```asp
+<!-- After -->
 <!DOCTYPE html>
 <html>
   <body>
@@ -72,22 +158,53 @@ end if
   </body>
 </html>
 ```
+</details>
 
-## ⚙️ Settings
 <details>
-<summary>⚙️ Settings (click to expand/collapse)</summary>
+<summary><strong>💡 IntelliSense & Auto-Completion</strong></summary>
+
+- ✅ **HTML**: Tag and attribute suggestions with smart auto-closing
+- ✅ **CSS**: Property completion inside `<style>` tags
+- ✅ **JavaScript**: Keyword and object completion inside `<script>` tags
+- ✅ **ASP/VBScript**: Response, Request, Server, Session, Application objects and VBScript keywords
+</details>
+
+<details>
+<summary><strong>📝 Snippets</strong></summary>
+
+- ✅ Pre-built snippets for HTML, ASP, and JavaScript patterns
+- ✅ Quick insertion for common structures (loops, conditionals, database connections)
+- ✅ Customisable templates for your workflow
+</details>
+
+<details>
+<summary><strong>🌈 Syntax Highlighting</strong></summary>
+
+- ✅ ASP region highlighting with customisable colours
+- ✅ Compatible with all VS Code themes
+- ✅ Comprehensive SQL syntax colouring with advanced support
+- ✅ Toggleable highlighting for `<% %>` blocks
+- ✅ Distinct colours for keywords, functions, data types, operators, and parameters
+</details>
+
+---
+
+## ⚙️ Configuration
+
+<details>
+<summary><strong>⚙️ Formatter Settings</strong></summary>
 
 Access settings via `File → Preferences → Settings` and search for "Classic ASP Language Support".
-
-### Formatter Settings
 
 | Setting | Default | Options | Description |
 |---------|---------|---------|-------------|
 | `aspLanguageSupport.keywordCase` | `PascalCase` | `lowercase`, `UPPERCASE`, `PascalCase` | VBScript keyword formatting style |
 | `aspLanguageSupport.useTabs` | `false` | `true`, `false` | Use tabs instead of spaces for ASP code |
 | `aspLanguageSupport.indentSize` | `2` | `2`, `4`, `8` | Number of spaces per indent level for ASP code |
+</details>
 
-### Prettier Settings (HTML/CSS/JS)
+<details>
+<summary><strong>🎨 Prettier Settings (HTML/CSS/JS)</strong></summary>
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -101,8 +218,10 @@ Access settings via `File → Preferences → Settings` and search for "Classic 
 | `aspLanguageSupport.prettier.trailingComma` | `es5` | Print trailing commas where valid in ES5 |
 | `aspLanguageSupport.prettier.endOfLine` | `lf` | Line ending style |
 | `aspLanguageSupport.prettier.htmlWhitespaceSensitivity` | `css` | How to handle whitespace in HTML |
+</details>
 
-### Completion & Highlighting Settings
+<details>
+<summary><strong>🌈 Completion & Highlighting Settings</strong></summary>
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -118,15 +237,28 @@ Access settings via `File → Preferences → Settings` and search for "Classic 
 | `aspLanguageSupport.enableSQLHighlighting` | `true` | Enable/disable SQL syntax colouring in VBScript strings |
 </details>
 
+---
+
+## 📋 Known Limitations
+
+> **Note:** These are edge cases that may require manual adjustment
+
+- ASP blocks must be properly closed (`<% ... %>`)
+- Complex mixed HTML/ASP structures may require manual adjustment
+- Prettier settings only apply to HTML/CSS/JS, not VBScript
+
+---
+
 ## 🛠️ Development
+
 <details>
-<summary>🛠️ Development (click to expand/collapse)</summary>
+<summary><b>Building from Source</b></summary>
 
 ### Prerequisites
 - Node.js 16.x or higher
 - Visual Studio Code 1.80.0 or higher
 
-### Building from Source
+### Build Steps
 
 ```bash
 # Clone the repository
@@ -139,34 +271,38 @@ npm install
 # Compile TypeScript
 npm run compile
 
-# Run extension in debug mode (Press F5 in VS Code)
+# Run extension in debug mode
+# Press F5 in VS Code
 ```
 </details>
 
-## 📋 Known Limitations
-
-- ASP blocks must be properly closed (`<% ... %>`)
-- Complex mixed HTML/ASP structures may require manual adjustment
-- Prettier settings only apply to HTML/CSS/JS, not VBScript
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to submit issues and pull requests.
+Contributions are welcome! If you have ideas, bug reports, or want to improve the extension:
 
-## 📄 License
+1. 🍴 Fork the repository
+2. 🌿 Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. 💾 Commit your changes (`git commit -m 'Add amazing feature'`)
+4. 📤 Push to the branch (`git push origin feature/amazing-feature`)
+5. 🎉 Open a Pull Request
 
-MIT License - see [LICENSE](LICENSE) file for details
+---
 
-## 🙏 Acknowledgments
+## 🙏 Acknowledgements
+
+This extension wouldn't be possible without these amazing projects:
 
 - **[Prettier](https://prettier.io/)** - HTML, CSS, and JavaScript formatting engine
 - **Zachary Becknell** ( [ASP Classic Support](https://github.com/zbecknell/asp-classic-support) ) - ASP region highlighting implementation
 - **Jintae Joo** ( [Classic ASP Syntaxes and Snippets](https://github.com/jtjoo/vscode-classic-asp-extension) ) - Snippets inspiration and reference
 
-## 📮 Support
-
-If you encounter any issues or have suggestions, please [open an issue](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues) on GitHub.
-
 ---
 
+<div align="center">
+
+If you find this extension helpful, please consider leaving a ⭐ on GitHub and a rating on the VS Code Marketplace!<br>
 **Made with ❤️ for the Classic ASP community**
+
+</div>
