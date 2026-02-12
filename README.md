@@ -5,10 +5,10 @@
 	Classic ASP Language Support for <a href="https://code.visualstudio.com">VSCode</a><br>
     <img src="https://raw.githubusercontent.com/catppuccin/catppuccin/main/assets/misc/transparent.png" height="30" width="0px"/>
     
-[![Version](https://img.shields.io/visual-studio-marketplace/v/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=b7bdf8&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
-[![Downloads](https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=8aadf4)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
-    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge"></a>
-    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
+[![Version](https://img.shields.io/visual-studio-marketplace/v/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=b7bdf8&logo=visual-studio-code&cacheSeconds=3600)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
+[![Downloads](https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=8aadf4&cacheSeconds=3600)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
+    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge&cacheSeconds=3600"></a>
+    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8&cacheSeconds=3600"/></a>
 </h3>
 
 ---
@@ -19,23 +19,24 @@
 
 ---
 
-
-
 ## ✨ What's Inside
 
 <table>
     <tr>
-        <td width="33%" align="center">
+        <td width="33%" align="center" valign="top">
             <h3>🎨 Smart Formatting</h3>
-            <p>Multi-language formatting for VBScript, HTML, CSS, JavaScript, and SQL with customisable keyword casing</p>
+            <p>Multi-language formatting for VBScript, HTML, CSS, and JavaScript with customisable keyword casing</p>
+            <p></p>
         </td>
-        <td width="33%" align="center">
+        <td width="33%" align="center" valign="top">
             <h3>🌈 Syntax Highlighting</h3>
             <p>Beautiful, theme-compatible syntax colouring for ASP regions and SQL queries</p>
+            <p></p>
         </td>
-        <td width="33%" align="center">
+        <td width="33%" align="center" valign="top">
             <h3>💡 IntelliSense</h3>
             <p>Auto-completion for ASP objects, VBScript keywords, HTML, CSS, and JavaScript</p>
+            <p></p>
         </td>
     </tr>
 </table>
@@ -96,13 +97,14 @@
 
 ---
 
-### 🚀 Installation
+## 🚀 Installation
+
 1. Install from VS Code Extensions Marketplace (search for "Classic ASP Language Support")
 2. Or install from `.vsix` file: Extensions → Install from VSIX
 
 ---
 
-### Usage
+## 📖 Usage
 
 | Action | Shortcut |
 |--------|----------|
@@ -115,7 +117,7 @@
 ## 🎯 Key Features
 
 <details open>
-<summary><h3>🎨 Multi-Language Formatting</h3></summary>
+<summary><strong>🎨 Multi-Language Formatting</strong></summary>
 
 - ✅ **VBScript**: Smart indentation for all control structures (If/For/While/Select Case/Sub/Function)
 - ✅ **HTML/CSS/JavaScript**: Professional formatting powered by Prettier
@@ -159,7 +161,7 @@ end if
 </details>
 
 <details>
-<summary><h3>💡 IntelliSense & Auto-Completion</h3></summary>
+<summary><strong>💡 IntelliSense & Auto-Completion</strong></summary>
 
 - ✅ **HTML**: Tag and attribute suggestions with smart auto-closing
 - ✅ **CSS**: Property completion inside `<style>` tags
@@ -168,7 +170,7 @@ end if
 </details>
 
 <details>
-<summary><h3>📝 Snippets</h3></summary>
+<summary><strong>📝 Snippets</strong></summary>
 
 - ✅ Pre-built snippets for HTML, ASP, and JavaScript patterns
 - ✅ Quick insertion for common structures (loops, conditionals, database connections)
@@ -176,7 +178,7 @@ end if
 </details>
 
 <details>
-<summary><h3>🌈 Syntax Highlighting</h3></summary>
+<summary><strong>🌈 Syntax Highlighting</strong></summary>
 
 - ✅ ASP region highlighting with customisable colours
 - ✅ Compatible with all VS Code themes
@@ -190,7 +192,7 @@ end if
 ## ⚙️ Configuration
 
 <details>
-<summary><h3>⚙️ Formatter Settings</h3></summary>
+<summary><strong>⚙️ Formatter Settings</strong></summary>
 
 Access settings via `File → Preferences → Settings` and search for "Classic ASP Language Support".
 
@@ -202,7 +204,7 @@ Access settings via `File → Preferences → Settings` and search for "Classic 
 </details>
 
 <details>
-<summary><h3>🎨 Prettier Settings (HTML/CSS/JS)</h3></summary>
+<summary><strong>🎨 Prettier Settings (HTML/CSS/JS)</strong></summary>
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -219,7 +221,7 @@ Access settings via `File → Preferences → Settings` and search for "Classic 
 </details>
 
 <details>
-<summary><h3>🌈 Completion & Highlighting Settings</h3></summary>
+<summary><strong>🌈 Completion & Highlighting Settings</strong></summary>
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -288,39 +290,19 @@ Contributions are welcome! If you have ideas, bug reports, or want to improve th
 
 ---
 
-## 📄 Licence
-
-This project is licensed under the MIT Licence - see the [LICENSE](LICENSE) file for details.
-
----
-
 ## 🙏 Acknowledgements
 
 This extension wouldn't be possible without these amazing projects:
 
 - **[Prettier](https://prettier.io/)** - HTML, CSS, and JavaScript formatting engine
-- **Zachary Becknell** ([ASP Classic Support](https://github.com/zbecknell/asp-classic-support)) - ASP region highlighting implementation
-- **Jintae Joo** ([Classic ASP Syntaxes and Snippets](https://github.com/jtjoo/vscode-classic-asp-extension)) - Snippets inspiration and reference
-
----
-
-## 📮 Support & Feedback
-
-<div align="center">
-
-### Need Help?
-
-[![Issues](https://img.shields.io/badge/Report%20Issue-GitHub-purple?style=for-the-badge&logo=github)](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues)
-[![Discussions](https://img.shields.io/badge/Discussions-GitHub-blue?style=for-the-badge&logo=github)](https://github.com/ashtonckj/Classic-ASP-Language-Support/discussions)
-
-If you find this extension helpful, please consider leaving a ⭐ on GitHub and a rating on the VS Code Marketplace!
-
-</div>
+- **Zachary Becknell** ( [ASP Classic Support](https://github.com/zbecknell/asp-classic-support) ) - ASP region highlighting implementation
+- **Jintae Joo** ( [Classic ASP Syntaxes and Snippets](https://github.com/jtjoo/vscode-classic-asp-extension) ) - Snippets inspiration and reference
 
 ---
 
 <div align="center">
 
+If you find this extension helpful, please consider leaving a ⭐ on GitHub and a rating on the VS Code Marketplace!<br>
 **Made with ❤️ for the Classic ASP community**
 
 </div>
