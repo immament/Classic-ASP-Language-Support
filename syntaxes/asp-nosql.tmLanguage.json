@@ -1,8 +1,8 @@
 {
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-    "name": "ASP",
+    "name": "Classic ASP",
     "scopeName": "text.html.asp",
-    "comment": "Classic ASP with HTML (No SQL Highlighting in Strings)",
+    "comment": "Classic ASP with HTML - VBScript syntax highlighting inside <% %> blocks",
     "fileTypes": [
         "asp",
         "asa"
@@ -10,62 +10,65 @@
     "foldingStartMarker": "(?i)^\\s*(Public|Private)?\\s*(Class|Function|Sub|Property)\\s*([a-zA-Z_]\\w*)\\s*(\\(.*\\)\\s*)?$",
     "foldingStopMarker": "(?i)^\\s*End (Class|Function|Sub|Property)\\s*$",
     "injections": {
-        "text.html.asp": {
+        "text.html.asp - (meta.embedded | meta.tag), L:((text.html.asp meta.tag) - (meta.embedded.block.asp | meta.embedded.line.asp)), L:(source.js - (meta.embedded.block.asp | meta.embedded.line.asp)), L:(source.css - (meta.embedded.block.asp | meta.embedded.line.asp))": {
             "patterns": [
                 {
-                    "include": "#asp-output-block"
-                },
-                {
-                    "include": "#asp-code-block"
+                    "include": "#asp-tag"
                 }
             ]
         }
     },
     "patterns": [
         {
-            "include": "text.html.basic"
+            "include": "text.html.derivative"
         }
     ],
     "repository": {
-        "asp-code-block": {
-            "name": "meta.embedded.block.asp",
-            "begin": "\\s*<%(?!=)",
-            "end": "%>",
-            "beginCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.begin.asp"
-                }
-            },
-            "endCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.end.asp"
-                }
-            },
-            "contentName": "source.asp",
+        "asp-tag": {
             "patterns": [
                 {
-                    "include": "#vbscript-code"
-                }
-            ]
-        },
-        "asp-output-block": {
-            "name": "meta.embedded.expression.asp",
-            "begin": "\\s*<%=",
-            "end": "%>",
-            "beginCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.begin.asp"
-                }
-            },
-            "endCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.end.asp"
-                }
-            },
-            "contentName": "source.asp",
-            "patterns": [
+                    "comment": "ASP output block <%=",
+                    "name": "meta.embedded.line.asp",
+                    "begin": "<%=",
+                    "end": "%>",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.begin.asp"
+                        }
+                    },
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.end.asp"
+                        }
+                    },
+                    "contentName": "source.asp",
+                    "patterns": [
+                        {
+                            "include": "#vbscript-code"
+                        }
+                    ]
+                },
                 {
-                    "include": "#vbscript-code"
+                    "comment": "ASP code block <%",
+                    "name": "meta.embedded.block.asp",
+                    "begin": "<%",
+                    "end": "%>",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.begin.asp"
+                        }
+                    },
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.end.asp"
+                        }
+                    },
+                    "contentName": "source.asp",
+                    "patterns": [
+                        {
+                            "include": "#vbscript-code"
+                        }
+                    ]
                 }
             ]
         },
@@ -151,7 +154,7 @@
         "strings": {
             "patterns": [
                 {
-                    "comment": "Regular strings - fallback for non-SQL strings",
+                    "comment": "Regular strings",
                     "name": "string.quoted.double.asp",
                     "begin": "\"",
                     "end": "\"(?!\")",

@@ -1,8 +1,8 @@
 {
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-    "name": "ASP",
+    "name": "Classic ASP",
     "scopeName": "text.html.asp",
-    "comment": "Classic ASP with HTML",
+    "comment": "Classic ASP with HTML (SQL Highlighting in Strings)",
     "fileTypes": [
         "asp",
         "asa"
@@ -10,62 +10,65 @@
     "foldingStartMarker": "(?i)^\\s*(Public|Private)?\\s*(Class|Function|Sub|Property)\\s*([a-zA-Z_]\\w*)\\s*(\\(.*\\)\\s*)?$",
     "foldingStopMarker": "(?i)^\\s*End (Class|Function|Sub|Property)\\s*$",
     "injections": {
-        "text.html.asp": {
+        "text.html.asp - (meta.embedded | meta.tag), L:((text.html.asp meta.tag) - (meta.embedded.block.asp | meta.embedded.line.asp)), L:(source.js - (meta.embedded.block.asp | meta.embedded.line.asp)), L:(source.css - (meta.embedded.block.asp | meta.embedded.line.asp))": {
             "patterns": [
                 {
-                    "include": "#asp-output-block"
-                },
-                {
-                    "include": "#asp-code-block"
+                    "include": "#asp-tag"
                 }
             ]
         }
     },
     "patterns": [
         {
-            "include": "text.html.basic"
+            "include": "text.html.derivative"
         }
     ],
     "repository": {
-        "asp-code-block": {
-            "name": "meta.embedded.block.asp",
-            "begin": "\\s*<%(?!=)",
-            "end": "%>",
-            "beginCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.begin.asp"
-                }
-            },
-            "endCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.end.asp"
-                }
-            },
-            "contentName": "source.asp",
+        "asp-tag": {
             "patterns": [
                 {
-                    "include": "#vbscript-code"
-                }
-            ]
-        },
-        "asp-output-block": {
-            "name": "meta.embedded.expression.asp",
-            "begin": "\\s*<%=",
-            "end": "%>",
-            "beginCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.begin.asp"
-                }
-            },
-            "endCaptures": {
-                "0": {
-                    "name": "punctuation.section.embedded.end.asp"
-                }
-            },
-            "contentName": "source.asp",
-            "patterns": [
+                    "comment": "ASP output block <%=",
+                    "name": "meta.embedded.line.asp",
+                    "begin": "<%=",
+                    "end": "%>",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.begin.asp"
+                        }
+                    },
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.end.asp"
+                        }
+                    },
+                    "contentName": "source.asp",
+                    "patterns": [
+                        {
+                            "include": "#vbscript-code"
+                        }
+                    ]
+                },
                 {
-                    "include": "#vbscript-code"
+                    "comment": "ASP code block <%",
+                    "name": "meta.embedded.block.asp",
+                    "begin": "<%",
+                    "end": "%>",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.begin.asp"
+                        }
+                    },
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.end.asp"
+                        }
+                    },
+                    "contentName": "source.asp",
+                    "patterns": [
+                        {
+                            "include": "#vbscript-code"
+                        }
+                    ]
                 }
             ]
         },
@@ -216,7 +219,7 @@
                     "match": "(?i)\\b(IS\\s+NOT\\s+NULL|IS\\s+NULL|NOT\\s+NULL|AND\\s+LIKE|ORDER\\s+BY|GROUP\\s+BY|UNION\\s+ALL|LEFT\\s+OUTER\\s+JOIN|RIGHT\\s+OUTER\\s+JOIN|FULL\\s+OUTER\\s+JOIN|LEFT\\s+JOIN|RIGHT\\s+JOIN|INNER\\s+JOIN|OUTER\\s+JOIN|FULL\\s+JOIN|CROSS\\s+JOIN|CROSS\\s+APPLY|OUTER\\s+APPLY|INSERT\\s+INTO|DELETE\\s+FROM|BEGIN\\s+TRANSACTION|COMMIT\\s+TRANSACTION|ROLLBACK\\s+TRANSACTION|PRIMARY\\s+KEY|FOREIGN\\s+KEY|WITH\\s+TIES)\\b"
                 },
                 {
-                    "comment": "SQL DML commands - including ON keyword for JOIN clauses",
+                    "comment": "SQL DML commands",
                     "name": "keyword.other.DML.sql",
                     "match": "(?i)\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|OUTPUT|EXEC|EXECUTE|FROM|WHERE|JOIN|ON|USING|HAVING|DISTINCT|TOP|LIMIT|OFFSET|FETCH|UNION|INTERSECT|EXCEPT|BY|ORDER|GROUP|APPLY|MATCHED|TIES)\\b"
                 },
@@ -306,7 +309,7 @@
                     "match": "@[a-zA-Z_][a-zA-Z0-9_]*"
                 },
                 {
-                    "comment": "SQL identifier brackets [table], [column] - brackets are orange, text inside is yellow - MUST come before table.column pattern",
+                    "comment": "SQL identifier brackets [table], [column]",
                     "name": "meta.brackets.sql",
                     "match": "(\\[)([^\\]]+)(\\])",
                     "captures": {
@@ -322,7 +325,7 @@
                     }
                 },
                 {
-                    "comment": "SQL table.column or alias.column pattern (a.RowID, b.Company) - MUST come after keywords and brackets",
+                    "comment": "SQL table.column or alias.column pattern",
                     "name": "meta.column-reference.sql",
                     "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\.(\\*|[a-zA-Z_][a-zA-Z0-9_]*)",
                     "captures": {
