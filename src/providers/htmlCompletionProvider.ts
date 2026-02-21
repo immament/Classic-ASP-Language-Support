@@ -7,8 +7,74 @@ import {
     getCurrentTagName,
     isAfterOpenBracket,
     isInsideTagForAttributes,
-    getTextBeforeCursor
+    getTextBeforeCursor,
+    isInsideAspBlock
 } from '../utils/documentHelper';
+
+// VBScript keywords that open an indented block.
+// Note: Else/ElseIf appear here too because after them the next line should be +1.
+const VBSCRIPT_BLOCK_OPENERS = /^(If\b.*Then|ElseIf\b.*Then|Else\b|For\b|For\s+Each\b|Do\b|Do\s+While\b|Do\s+Until\b|While\b|Sub\b|Function\b|With\b|Select\s+Case\b|Class\b)/i;
+
+// VBScript keywords that close a block — the line itself should be de-indented one level.
+// Note: Else/ElseIf appear here too because they close the previous If block before opening a new one.
+const VBSCRIPT_BLOCK_CLOSERS = /^(End\s+If\b|End\s+Sub\b|End\s+Function\b|End\s+With\b|End\s+Select\b|End\s+Class\b|Next\b|Loop\b|Wend\b|ElseIf\b|Else\b)/i;
+
+// Map each closer keyword to its corresponding opener keyword pattern.
+// Used so we can count balanced pairs when scanning upward.
+const CLOSER_TO_OPENER: { closer: RegExp; opener: RegExp }[] = [
+    { closer: /^End\s+If\b/i,       opener: /^If\b.*Then$/i },
+    { closer: /^End\s+Sub\b/i,      opener: /^Sub\b/i },
+    { closer: /^End\s+Function\b/i, opener: /^Function\b/i },
+    { closer: /^End\s+With\b/i,     opener: /^With\b/i },
+    { closer: /^End\s+Select\b/i,   opener: /^Select\s+Case\b/i },
+    { closer: /^End\s+Class\b/i,    opener: /^Class\b/i },
+    { closer: /^Next\b/i,           opener: /^For\b|^For\s+Each\b/i },
+    { closer: /^Loop\b/i,           opener: /^Do\b|^Do\s+While\b|^Do\s+Until\b/i },
+    { closer: /^Wend\b/i,           opener: /^While\b/i },
+    // Else/ElseIf pair back to their If
+    { closer: /^ElseIf\b/i,         opener: /^If\b.*Then$|^ElseIf\b.*Then$/i },
+    { closer: /^Else\b/i,           opener: /^If\b.*Then$|^ElseIf\b.*Then$/i },
+];
+
+/**
+ * Given a closer keyword line, scan upward through the document to find
+ * the indent of its matching opener, counting nested pairs along the way.
+ * Returns the opener's indent string, or null if no match found.
+ */
+function findMatchingOpenerIndent(
+    document: vscode.TextDocument,
+    closerLineIndex: number,
+    closerText: string
+): string | null {
+    // Find which opener pattern to look for
+    const pair = CLOSER_TO_OPENER.find(p => p.closer.test(closerText));
+    if (!pair) { return null; }
+
+    let depth = 1; // we start inside one unclosed block
+
+    for (let i = closerLineIndex - 1; i >= 0; i--) {
+        const text = document.lineAt(i).text.trim();
+        if (!text) { continue; }
+
+        // If we find another closer of the same type, go deeper
+        if (pair.closer.test(text)) {
+            depth++;
+            continue;
+        }
+
+        // If we find an opener of the matching type, come up one level
+        if (pair.opener.test(text)) {
+            depth--;
+            if (depth === 0) {
+                // This is the matching opener — return its indent
+                const match = document.lineAt(i).text.match(/^(\s*)/);
+                return match ? match[1] : '';
+            }
+        }
+    }
+
+    return null; // no matching opener found
+}
 
 export class HtmlCompletionProvider implements vscode.CompletionItemProvider {
 
@@ -190,12 +256,52 @@ export function registerAutoClosingTag(context: vscode.ExtensionContext) {
                 }
             }
         }
+
+        // Auto-snap VBScript closer keywords to correct indent as user finishes typing.
+        // Fires on insertions only, and only when the whole line is exactly a closer keyword.
+        // Only snap when the user typed a real character (not tab/space-only indent changes)
+        if (change.text !== '' && /\S/.test(change.text)) {
+            const changePosition = change.range.start;
+            const currentLine = event.document.lineAt(changePosition.line);
+            const currentLineTrimmed = currentLine.text.trim();
+            const currentIndent = currentLine.text.match(/^(\s*)/)?.[1] ?? '';
+
+            const isExactCloser =
+                /^(End\s+If|End\s+Sub|End\s+Function|End\s+With|End\s+Select|End\s+Class|Next|Loop|Wend|ElseIf(?:\s+.*Then)?|Else)$/i
+                .test(currentLineTrimmed);
+
+            if (
+                isExactCloser &&
+                isInsideAspBlock(event.document.getText(), event.document.offsetAt(
+                    new vscode.Position(changePosition.line, currentLine.text.length)
+                ))
+            ) {
+                const openerIndent = findMatchingOpenerIndent(event.document, changePosition.line, currentLineTrimmed);
+
+                if (openerIndent !== null && openerIndent !== currentIndent) {
+                    editor.edit(editBuilder => {
+                        editBuilder.replace(
+                            new vscode.Range(
+                                new vscode.Position(changePosition.line, 0),
+                                new vscode.Position(changePosition.line, currentIndent.length)
+                            ),
+                            openerIndent
+                        );
+                    }).then(() => {
+                        const newCol = openerIndent.length + currentLineTrimmed.length;
+                        const newPos = new vscode.Position(changePosition.line, newCol);
+                        editor.selection = new vscode.Selection(newPos, newPos);
+                    });
+                }
+            }
+        }
+
     });
 
     context.subscriptions.push(disposable);
 }
 
-// Register Enter key handler for auto-closing tags
+// Register Enter key handler for auto-closing tags and smart ASP/VBScript indentation
 export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
     const disposable = vscode.commands.registerCommand('asp.insertLineBreak', () => {
         const editor = vscode.window.activeTextEditor;
@@ -204,27 +310,110 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
         }
 
         const position = editor.selection.active;
-        const line = editor.document.lineAt(position.line);
+        const document = editor.document;
+        const line = document.lineAt(position.line);
         const textBefore = line.text.substring(0, position.character);
         const textAfter = line.text.substring(position.character);
+        const currentLineText = textBefore.trim();
+
+        const tabSize = editor.options.tabSize as number || 4;
+        const useSpaces = editor.options.insertSpaces !== false;
+        const indentUnit = useSpaces ? ' '.repeat(tabSize) : '\t';
+        const indent = textBefore.match(/^(\s*)/)?.[0] || '';
+
+        // ----------------------------------------------------------------
+        // ASP / VBScript block handling
+        // ----------------------------------------------------------------
+        const inAspBlock = isInsideAspBlock(document.getText(), document.offsetAt(position));
+
+        if (inAspBlock) {
+            // Pressing Enter right after <% or <%= → stay at same indent, no extra level
+            if (/^<%=?$/.test(currentLineText)) {
+                editor.edit(editBuilder => {
+                    editBuilder.insert(position, `\n${indent}`);
+                }).then(() => {
+                    const newPos = new vscode.Position(position.line + 1, indent.length);
+                    editor.selection = new vscode.Selection(newPos, newPos);
+                });
+                return;
+            }
+
+            // VBScript block closer on current line → snap this line to its matching opener's
+            // indent, then put the next line at that same level.
+            if (VBSCRIPT_BLOCK_CLOSERS.test(currentLineText)) {
+                const openerIndent = findMatchingOpenerIndent(document, position.line, currentLineText);
+
+                // Only reindent if we found a matching opener AND the current indent is wrong
+                const targetIndent = openerIndent !== null ? openerIndent : indent;
+
+                if (targetIndent !== indent) {
+                    // First edit: correct this line's indentation
+                    editor.edit(editBuilder => {
+                        editBuilder.replace(
+                            new vscode.Range(
+                                new vscode.Position(position.line, 0),
+                                new vscode.Position(position.line, indent.length)
+                            ),
+                            targetIndent
+                        );
+                    }).then(() => {
+                        // Second edit: insert newline with corrected indent
+                        const newLineStart = targetIndent.length + currentLineText.length;
+                        editor.edit(editBuilder => {
+                            editBuilder.insert(
+                                new vscode.Position(position.line, newLineStart),
+                                `\n${targetIndent}`
+                            );
+                        }).then(() => {
+                            const newPos = new vscode.Position(position.line + 1, targetIndent.length);
+                            editor.selection = new vscode.Selection(newPos, newPos);
+                        });
+                    });
+                } else {
+                    // Indent is already correct — just insert newline at same level
+                    editor.edit(editBuilder => {
+                        editBuilder.insert(position, `\n${indent}`);
+                    }).then(() => {
+                        const newPos = new vscode.Position(position.line + 1, indent.length);
+                        editor.selection = new vscode.Selection(newPos, newPos);
+                    });
+                }
+                return;
+            }
+
+            // VBScript block opener → next line gets +1 indent
+            if (VBSCRIPT_BLOCK_OPENERS.test(currentLineText)) {
+                editor.edit(editBuilder => {
+                    editBuilder.insert(position, `\n${indent}${indentUnit}`);
+                }).then(() => {
+                    const newPos = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
+                    editor.selection = new vscode.Selection(newPos, newPos);
+                });
+                return;
+            }
+
+            // Default inside ASP block → match current line's indent exactly
+            editor.edit(editBuilder => {
+                editBuilder.insert(position, `\n${indent}`);
+            }).then(() => {
+                const newPos = new vscode.Position(position.line + 1, indent.length);
+                editor.selection = new vscode.Selection(newPos, newPos);
+            });
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // HTML context handling (original logic, unchanged)
+        // ----------------------------------------------------------------
 
         // Check if we're inside an HTML comment: <!-- | -->
         if (textBefore.trim().endsWith('<!--') && textAfter.trim().startsWith('-->')) {
-            const indent = textBefore.match(/^\s*/)?.[0] || '';
-            const tabSize = editor.options.tabSize as number || 4;
-            const useSpaces = editor.options.insertSpaces !== false;
-            const indentChar = useSpaces ? ' '.repeat(tabSize) : '\t';
-
             editor.edit(editBuilder => {
-                // Delete the closing --> from current line
                 const endOfLine = line.range.end;
                 editBuilder.delete(new vscode.Range(position, endOfLine));
-
-                // Insert: newline, indent+tab for cursor, newline, closing comment
-                editBuilder.insert(position, `\n${indent}${indentChar}\n${indent}-->`);
+                editBuilder.insert(position, `\n${indent}${indentUnit}\n${indent}-->`);
             }).then(() => {
-                // Move cursor to the indented line
-                const newPosition = new vscode.Position(position.line + 1, indent.length + indentChar.length);
+                const newPosition = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
                 editor.selection = new vscode.Selection(newPosition, newPosition);
             });
             return;
@@ -239,48 +428,29 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
             if (!isSelfClosingTag(tagName)) {
                 const closingTag = `</${tagName}>`;
 
-                // Check if closing tag exists anywhere after cursor (not just same line)
-                const textAfterCursor = editor.document.getText(
-                    new vscode.Range(position, editor.document.positionAt(editor.document.getText().length))
+                const textAfterCursor = document.getText(
+                    new vscode.Range(position, document.positionAt(document.getText().length))
                 );
 
-                // Look for the closing tag (allowing for whitespace and other content)
                 const closingTagRegex = new RegExp(`</${tagName}>`, 'i');
                 if (closingTagRegex.test(textAfterCursor)) {
-                    // Closing tag already exists
-                    // Check if closing tag is on the same line immediately after cursor
                     if (textAfter.trim().startsWith(closingTag)) {
-                        // Closing tag is right after cursor: <style>|</style>
-                        // Insert newline, indented line for cursor, newline, then closing tag with original indent
-                        const indent = textBefore.match(/^\s*/)?.[0] || '';
-                        const tabSize = editor.options.tabSize as number || 4;
-                        const useSpaces = editor.options.insertSpaces !== false;
-                        const indentChar = useSpaces ? ' '.repeat(tabSize) : '\t';
-
+                        // Closing tag is right after cursor: <div>|</div>
                         editor.edit(editBuilder => {
-                            // Delete the closing tag from current position
                             const endOfLine = line.range.end;
                             editBuilder.delete(new vscode.Range(position, endOfLine));
-
-                            // Insert: newline, indent+tab for cursor, newline, closing tag
-                            editBuilder.insert(position, `\n${indent}${indentChar}\n${indent}${closingTag}`);
+                            editBuilder.insert(position, `\n${indent}${indentUnit}\n${indent}${closingTag}`);
                         }).then(() => {
-                            // Move cursor to the indented line
-                            const newPosition = new vscode.Position(position.line + 1, indent.length + indentChar.length);
+                            const newPosition = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
                             editor.selection = new vscode.Selection(newPosition, newPosition);
                         });
                         return;
                     } else {
                         // Closing tag exists elsewhere, just add newline with indent
-                        const indent = textBefore.match(/^\s*/)?.[0] || '';
-                        const tabSize = editor.options.tabSize as number || 4;
-                        const useSpaces = editor.options.insertSpaces !== false;
-                        const indentChar = useSpaces ? ' '.repeat(tabSize) : '\t';
-
                         editor.edit(editBuilder => {
-                            editBuilder.insert(position, `\n${indent}${indentChar}`);
+                            editBuilder.insert(position, `\n${indent}${indentUnit}`);
                         }).then(() => {
-                            const newPosition = new vscode.Position(position.line + 1, indent.length + indentChar.length);
+                            const newPosition = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
                             editor.selection = new vscode.Selection(newPosition, newPosition);
                         });
                         return;
@@ -288,17 +458,10 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
                 }
 
                 // No closing tag exists - create it
-                const indent = textBefore.match(/^\s*/)?.[0] || '';
-                const tabSize = editor.options.tabSize as number || 4;
-                const useSpaces = editor.options.insertSpaces !== false;
-                const indentChar = useSpaces ? ' '.repeat(tabSize) : '\t';
-
                 editor.edit(editBuilder => {
-                    // Insert: newline, indent+tab for cursor, newline, closing tag
-                    editBuilder.insert(position, `\n${indent}${indentChar}\n${indent}${closingTag}`);
+                    editBuilder.insert(position, `\n${indent}${indentUnit}\n${indent}${closingTag}`);
                 }).then(() => {
-                    // Move cursor to the first indented line (line after opening tag)
-                    const newPosition = new vscode.Position(position.line + 1, indent.length + indentChar.length);
+                    const newPosition = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
                     editor.selection = new vscode.Selection(newPosition, newPosition);
                 });
                 return;
@@ -313,15 +476,11 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
 
             if (!isSelfClosingTag(tagName)) {
                 const closingTag = `</${tagName}>`;
-                const indent = textBefore.match(/^\s*/)?.[0] || '';
-                const tabSize = editor.options.tabSize as number || 4;
-                const useSpaces = editor.options.insertSpaces !== false;
-                const indentChar = useSpaces ? ' '.repeat(tabSize) : '\t';
 
                 editor.edit(editBuilder => {
-                    editBuilder.insert(position, `>\n${indent}${indentChar}\n\n${indent}${closingTag}`);
+                    editBuilder.insert(position, `>\n${indent}${indentUnit}\n\n${indent}${closingTag}`);
                 }).then(() => {
-                    const newPosition = new vscode.Position(position.line + 1, indent.length + indentChar.length);
+                    const newPosition = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
                     editor.selection = new vscode.Selection(newPosition, newPosition);
                 });
                 return;
@@ -329,6 +488,83 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
         }
 
         return vscode.commands.executeCommand('default:type', { text: '\n' });
+    });
+
+    context.subscriptions.push(disposable);
+}
+
+// Register Tab key handler for smart indentation
+export function registerTabKeyHandler(context: vscode.ExtensionContext) {
+    const disposable = vscode.commands.registerCommand('asp.insertTab', () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document.languageId !== 'asp') {
+            return vscode.commands.executeCommand('tab');
+        }
+
+        const position = editor.selection.active;
+        const line = editor.document.lineAt(position.line);
+        const lineText = line.text;
+
+        // Only apply smart indent if the line is empty or only whitespace before cursor
+        const isLineBlankSoFar = lineText.trim() === '';
+        if (!isLineBlankSoFar) {
+            return vscode.commands.executeCommand('tab');
+        }
+
+        const tabSize = editor.options.tabSize as number || 4;
+        const useSpaces = editor.options.insertSpaces !== false;
+        const indentUnit = useSpaces ? ' '.repeat(tabSize) : '\t';
+
+        // Find the nearest non-empty line above
+        let baseIndent = '';
+        let prevLineText = '';
+        for (let i = position.line - 1; i >= 0; i--) {
+            const text = editor.document.lineAt(i).text;
+            if (text.trim().length > 0) {
+                const match = text.match(/^(\s*)/);
+                baseIndent = match ? match[1] : '';
+                prevLineText = text.trim();
+                break;
+            }
+        }
+
+        const inAspBlock = isInsideAspBlock(editor.document.getText(), editor.document.offsetAt(position));
+
+        // How much whitespace is already on this line
+        const currentIndent = lineText.match(/^(\s*)/)?.[1] ?? '';
+
+        // The "correct" indent we'd suggest based on context
+        let targetIndent: string;
+        if (/^<%/.test(prevLineText)) {
+            targetIndent = baseIndent;
+        } else if (inAspBlock && VBSCRIPT_BLOCK_OPENERS.test(prevLineText)) {
+            targetIndent = baseIndent + indentUnit;
+        } else if (inAspBlock) {
+            targetIndent = baseIndent;
+        } else {
+            targetIndent = baseIndent + indentUnit;
+        }
+
+        let newIndent: string;
+        if (currentIndent.length < targetIndent.length) {
+            // Below the correct level → snap up to it
+            newIndent = targetIndent;
+        } else {
+            // Already at or beyond the correct level → just add one more level freely
+            newIndent = currentIndent + indentUnit;
+        }
+
+        editor.edit(editBuilder => {
+            // Replace whatever whitespace is already on this line before the cursor
+            const replaceRange = new vscode.Range(
+                new vscode.Position(position.line, 0),
+                position
+            );
+            editBuilder.replace(replaceRange, newIndent);
+        }).then(() => {
+            const newPosition = new vscode.Position(position.line, newIndent.length);
+            editor.selection = new vscode.Selection(newPosition, newPosition);
+        });
     });
 
     context.subscriptions.push(disposable);

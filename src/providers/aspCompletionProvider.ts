@@ -56,6 +56,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
                 `**Methods/Properties:** ${obj.methods.join(', ')}`
             );
 
+            item.preselect = false;
             item.sortText = '1_' + obj.name;
 
             // Trigger method suggestions after inserting object
@@ -124,6 +125,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
                     item.insertText = method;
             }
 
+            item.preselect = false;
             item.sortText = '0_' + method;
 
             completions.push(item);
@@ -142,6 +144,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             // Don't show control structure snippets if after "End"
             if (isAfterEnd && (kw.keyword === 'If' || kw.keyword === 'Sub' || kw.keyword === 'Function' || kw.keyword === 'Select Case')) {
                 // Just insert the keyword, no snippet
+                item.preselect = false;
                 item.sortText = '1_' + kw.keyword;
                 return item;
             }
@@ -174,6 +177,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             }
 
             // Snippets sort at "0_", plain keywords at "1_"
+            item.preselect = false;
             item.sortText = (item.insertText ? '0_' : '1_') + kw.keyword;
 
             return item;
@@ -187,6 +191,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             item.detail = `VBScript function`;
             item.documentation = new vscode.MarkdownString(`**${func}()** - VBScript built-in function`);
             item.insertText = new vscode.SnippetString(`${func}($0)`);
+            item.preselect = false;
             item.sortText = '0_' + func;
             return item;
         });

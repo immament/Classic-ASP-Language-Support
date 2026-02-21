@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { formatCompleteAspFile } from './formatter/htmlFormatter';
-import { HtmlCompletionProvider, registerAutoClosingTag, registerEnterKeyHandler } from './providers/htmlCompletionProvider';
+import { HtmlCompletionProvider, registerAutoClosingTag, registerEnterKeyHandler, registerTabKeyHandler } from './providers/htmlCompletionProvider';
 import { AspCompletionProvider } from './providers/aspCompletionProvider';
 import { CssCompletionProvider } from './providers/cssCompletionProvider';
 import { CssHoverProvider } from './providers/cssHoverProvider';
@@ -110,6 +110,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register Enter key handler for smart tag closing
     registerEnterKeyHandler(context);
+
+    // Register Tab key handler for smart indentation
+    registerTabKeyHandler(context);
 
     // Register command to toggle SQL highlighting
     const toggleCommand = vscode.commands.registerCommand('asp.toggleSQLHighlighting', async () => {
