@@ -98,7 +98,7 @@
 - ✅ **Inline ASP support**: Formats ASP expressions in HTML attributes
 </details>
 
-<details>
+<details open>
 <summary><strong>💡 IntelliSense & Auto-Completion</strong></summary>
 
 - **HTML**: Tag and attribute suggestions with smart auto-closing
