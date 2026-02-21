@@ -50,36 +50,36 @@ export function getInlineStyleContext(
     content: string,
     offset: number
 ): { valueStart: number; valueEnd: number; wrappedOffset: number } | null {
-    // Search up to 500 chars before the cursor for style=" or style='
     const searchStart = Math.max(0, offset - 500);
     const searchArea = content.slice(searchStart, offset);
 
-    // Match style=" or style=' and capture the opening quote character
+    // Match style=" or style=' and capture the opening quote
     const styleAttrMatch = searchArea.match(/style\s*=\s*(["'])([\s\S]*)$/i);
     if (!styleAttrMatch) return null;
 
-    const openingQuote = styleAttrMatch[1]; // " or '
+    const openingQuote = styleAttrMatch[1];
     const valueStart = searchStart + styleAttrMatch.index! + styleAttrMatch[0].length - styleAttrMatch[2].length;
 
-    // Find the closing quote — search forward from the cursor position
-    // but also check if the very next character IS the closing quote (cursor right before it)
-    let closeQuoteIdx = content.indexOf(openingQuote, offset);
-
-    // If no closing quote found at all, bail out
+    // Find closing quote — search forward from valueStart (not offset)
+    // so that an empty value style="" where offset === closeQuoteIdx still works
+    const closeQuoteIdx = content.indexOf(openingQuote, valueStart);
     if (closeQuoteIdx === -1) return null;
 
-    // Make sure we haven't jumped past a tag boundary (> before the closing quote)
+    // Make sure we haven't jumped past a tag boundary
     const tagClose = content.indexOf('>', offset);
     if (tagClose !== -1 && tagClose < closeQuoteIdx) return null;
 
+    // Cursor must be between valueStart and closeQuoteIdx (inclusive of both ends)
+    if (offset < valueStart || offset > closeQuoteIdx) return null;
+
     const valueEnd = closeQuoteIdx;
 
-    // Build wrapped offset — "* {  " is 5 chars (double space so CSS service
-    // sees whitespace and returns all property suggestions from the start)
-    const WRAPPER_PREFIX_LEN = 5; // "* {  "
+    // Wrap as "* {  <declarations> }" — prefix is 5 chars
+    // We pad the offset by 2 so the CSS service always lands inside
+    // the declaration list even when the value is completely empty
+    const WRAPPER_PREFIX_LEN = 5;
     const relativeOffset = offset - valueStart;
-    // Always add 1 to ensure we land inside the declaration list, not before it
-    const wrappedOffset = WRAPPER_PREFIX_LEN + relativeOffset + 1;
+    const wrappedOffset = WRAPPER_PREFIX_LEN + relativeOffset + 2;
 
     return { valueStart, valueEnd, wrappedOffset };
 }
