@@ -2,11 +2,11 @@
 	<img src="images/icon.png" alt="Classic ASP Language Support Logo" width="100" height="100"><br>
 	Classic ASP Language Support for <a href="https://code.visualstudio.com">VSCode</a><br>
     <img src="https://raw.githubusercontent.com/catppuccin/catppuccin/main/assets/misc/transparent.png" height="30" width="0px"/>
-    
-[![Version](https://img.shields.io/visual-studio-marketplace/v/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=b7bdf8&logo=visual-studio-code&cacheSeconds=3600)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
+
+<a href="https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support"><img alt="Version: 1.0.0" src="https://img.shields.io/badge/Version-0.3.0-b7bdf8?style=for-the-badge&labelColor=363a4f&logo=visual-studio-code&cacheSeconds=86400"/></a>
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=8aadf4&cacheSeconds=3600)](https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support)
-    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge&cacheSeconds=3600"></a>
-    <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=MIT&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8&cacheSeconds=3600"/></a>
+<a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge&cacheSeconds=3600"></a>
+<a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-b7bdf8?style=for-the-badge&labelColor=363a4f&cacheSeconds=86400"/></a>
 </h3>
 
 ---
@@ -44,54 +44,26 @@
 ## 📸 See It In Action
 
 ### 🎨 Formatting Before & After
-<!-- PLACEHOLDER: Add GIF showing messy ASP code being formatted -->
-<!-- ![Formatting Demo](images/formatting-demo.gif) -->
-<details>
-<summary>📝 <b>What you'll see in this demo</b></summary>
+> *Colours in these previews are made possible by the **[Catppuccin Theme](https://github.com/catppuccin/vscode)***
 
-- Unformatted ASP code with inconsistent indentation
-- One-click formatting with `Alt + Shift + F`
-- Clean, properly indented VBScript, HTML, and inline ASP
-</details>
+<img src="images/format.gif" height="480">
 
-<br>
 
 ### 🌈 Syntax Highlighting
-<!-- PLACEHOLDER: Add GIF showing syntax highlighting for ASP regions and SQL -->
-<!-- ![Syntax Highlighting Demo](images/syntax-demo.gif) -->
-<details>
-<summary>📝 <b>What you'll see in this demo</b></summary>
 
-- ASP region highlighting with customisable background colours
-- SQL syntax colouring inside VBScript strings
-- Theme compatibility (light and dark modes)
-</details>
+<img src="images/sql.gif" width="500">
 
-<br>
-
-### 📋 Snippets Quick Insert
-<!-- PLACEHOLDER: Add GIF showing snippet usage -->
-<!-- ![Snippets Demo](images/snippets-demo.gif) -->
-<details>
-<summary>📝 <b>What you'll see in this demo</b></summary>
-
-- Quick insertion of common ASP patterns
-- Database connection templates
-- Loop and conditional structures
-</details>
-
-<br>
-
+<!-- Add GIF showing complex multi-block ASP formatting -->
+<!--
 ### ⚙️ Multi-Block Formatting
-<!-- PLACEHOLDER: Add GIF showing complex multi-block ASP formatting -->
-<!-- ![Multi-Block Demo](images/multiblock-demo.gif) -->
 <details>
-<summary>📝 <b>What you'll see in this demo</b></summary>
+<summary>📝 <b>Open Me For A Gif</b></summary>
 
 - If/Else/Loop structures spanning multiple `<% %>` blocks
 - Inline ASP expressions in HTML attributes
 - Complex mixed HTML/ASP structures
 </details>
+-->
 
 ---
 
@@ -124,47 +96,15 @@
 - ✅ **Automatic operator spacing**: Proper spacing around `=`, `+`, `&`, etc.
 - ✅ **Multi-block support**: Handles structures that span across multiple `<% %>` blocks
 - ✅ **Inline ASP support**: Formats ASP expressions in HTML attributes
-
-**Example:**
-```asp
-<!-- Before -->
-<!DOCTYPE html><html><body>
-<div><h1>Welcome <%=username%>!</h1>
-<%
-dim age
-age=request.form("age")
-if age>=18 then
-response.write("adult")
-end if
-%>
-</div></body></html>
-
-<!-- After -->
-<!DOCTYPE html>
-<html>
-  <body>
-    <div>
-      <h1>Welcome <%= username %>!</h1>
-      <%
-      Dim age
-      age = Request.Form("age")
-      If age >= 18 Then
-        Response.Write("adult")
-      End If
-      %>
-    </div>
-  </body>
-</html>
-```
 </details>
 
 <details>
 <summary><strong>💡 IntelliSense & Auto-Completion</strong></summary>
 
-- ✅ **HTML**: Tag and attribute suggestions with smart auto-closing
-- ✅ **CSS**: Property completion inside `<style>` tags
-- ✅ **JavaScript**: Keyword and object completion inside `<script>` tags
-- ✅ **ASP/VBScript**: Response, Request, Server, Session, Application objects and VBScript keywords
+- **HTML**: Tag and attribute suggestions with smart auto-closing
+- **CSS**: Property completion inside in-line and `<style>` tags
+- **JavaScript**: Keyword and object completion inside `<script>` tags
+- **ASP/VBScript**: Response, Request, Server, Session, Application objects and VBScript keywords
 </details>
 
 <details>
@@ -172,7 +112,6 @@ end if
 
 - ✅ Pre-built snippets for HTML, ASP, and JavaScript patterns
 - ✅ Quick insertion for common structures (loops, conditionals, database connections)
-- ✅ Customisable templates for your workflow
 </details>
 
 <details>
@@ -196,26 +135,27 @@ Access settings via `File → Preferences → Settings` and search for "Classic 
 
 | Setting | Default | Options | Description |
 |---------|---------|---------|-------------|
-| `aspLanguageSupport.keywordCase` | `PascalCase` | `lowercase`, `UPPERCASE`, `PascalCase` | VBScript keyword formatting style |
-| `aspLanguageSupport.useTabs` | `false` | `true`, `false` | Use tabs instead of spaces for ASP code |
-| `aspLanguageSupport.indentSize` | `2` | `2`, `4`, `8` | Number of spaces per indent level for ASP code |
+| `aspLanguageSupport.keywordCase` | `PascalCase` | `lowercase`, `UPPERCASE`, `PascalCase` | ASP/VBScript keyword formatting style |
+| `aspLanguageSupport.useTabs` | `false` | `true`, `false` | Use tabs instead of spaces for ASP code indentation |
+| `aspLanguageSupport.indentSize` | `2` | `2`, `4`, `8` | Number of spaces per indentation level for ASP code |
+| `aspLanguageSupport.asptagsOnSameLine` | `false` | `true`, `false` | Keep `<% %>` on same line as code (default: separate lines) |
 </details>
 
 <details>
 <summary><strong>🎨 Prettier Settings (HTML/CSS/JS)</strong></summary>
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `aspLanguageSupport.prettier.printWidth` | `80` | Maximum line length |
-| `aspLanguageSupport.prettier.tabWidth` | `2` | Spaces per indentation level |
-| `aspLanguageSupport.prettier.useTabs` | `false` | Use tabs instead of spaces |
-| `aspLanguageSupport.prettier.bracketSameLine` | `true` | Put `>` of multi-line HTML elements on last line |
-| `aspLanguageSupport.prettier.semi` | `true` | Add semicolons at end of JavaScript statements |
-| `aspLanguageSupport.prettier.singleQuote` | `false` | Use single quotes instead of double quotes in JavaScript |
-| `aspLanguageSupport.prettier.arrowParens` | `always` | Include parentheses around arrow function parameters |
-| `aspLanguageSupport.prettier.trailingComma` | `es5` | Print trailing commas where valid in ES5 |
-| `aspLanguageSupport.prettier.endOfLine` | `lf` | Line ending style |
-| `aspLanguageSupport.prettier.htmlWhitespaceSensitivity` | `css` | How to handle whitespace in HTML |
+| Setting | Default | Options | Description |
+|---------|---------|---------|-------------|
+| `aspLanguageSupport.prettier.printWidth` | `80` | number | Maximum line length (Prettier) |
+| `aspLanguageSupport.prettier.tabWidth` | `2` | `2`, `4`, `8` | Spaces per indentation level (Prettier) |
+| `aspLanguageSupport.prettier.useTabs` | `false` | `true`, `false` | Use tabs instead of spaces (Prettier) |
+| `aspLanguageSupport.prettier.bracketSameLine` | `true` | `true`, `false` | Put `>` of multi-line elements on last line (Prettier) |
+| `aspLanguageSupport.prettier.semi` | `true` | `true`, `false` | Add semicolons to JavaScript statements (Prettier) |
+| `aspLanguageSupport.prettier.singleQuote` | `false` | `true`, `false` | Use single quotes in JavaScript (Prettier) |
+| `aspLanguageSupport.prettier.arrowParens` | `always` | `always`, `avoid` | Arrow function parameter parentheses (Prettier) |
+| `aspLanguageSupport.prettier.trailingComma` | `es5` | `none`, `es5`, `all` | Trailing comma style (Prettier) |
+| `aspLanguageSupport.prettier.endOfLine` | `lf` | `lf`, `crlf`, `cr`, `auto` | Line ending style (Prettier) |
+| `aspLanguageSupport.prettier.htmlWhitespaceSensitivity` | `css` | `css`, `strict`, `ignore` | HTML whitespace handling (Prettier) |
 </details>
 
 <details>
@@ -223,16 +163,20 @@ Access settings via `File → Preferences → Settings` and search for "Classic 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `aspLanguageSupport.enableHTMLCompletion` | `true` | Enable HTML tag and attribute auto-completion |
-| `aspLanguageSupport.enableCSSCompletion` | `true` | Enable CSS property auto-completion |
-| `aspLanguageSupport.enableJSCompletion` | `true` | Enable JavaScript auto-completion |
-| `aspLanguageSupport.enableASPCompletion` | `true` | Enable ASP object and VBScript keyword auto-completion |
-| `aspLanguageSupport.highlightAspRegions` | `true` | Highlight ASP code regions with background colours |
-| `aspLanguageSupport.bracketLightColor` | `rgba(255, 100, 0, .2)` | ASP bracket colour for light themes |
-| `aspLanguageSupport.bracketDarkColor` | `rgba(0, 100, 255, .2)` | ASP bracket colour for dark themes |
-| `aspLanguageSupport.codeBlockLightColor` | `rgba(100,100,100,0.1)` | ASP code block colour for light themes |
-| `aspLanguageSupport.codeBlockDarkColor` | `rgba(220,220,220,0.1)` | ASP code block colour for dark themes |
-| `aspLanguageSupport.enableSQLHighlighting` | `true` | Enable/disable SQL syntax colouring in VBScript strings |
+| `aspLanguageSupport.enableSqlInStrings` | `true` | Enable SQL syntax highlighting inside double-quoted strings (requires reload) |
+| `aspLanguageSupport.enableAspRegions` | `true` | Highlight ASP code regions with background colours |
+| `aspLanguageSupport.bracketLightColor` | `rgba(255, 100, 0, 0.2)` | ASP bracket `<% %>` colour (light theme) |
+| `aspLanguageSupport.bracketDarkColor` | `rgba(0, 100, 255, 0.2)` | ASP bracket `<% %>` colour (dark theme) |
+| `aspLanguageSupport.codeBlockLightColor` | `rgba(100, 100, 100, 0.1)` | ASP code block background (light theme) |
+| `aspLanguageSupport.codeBlockDarkColor` | `rgba(220, 220, 220, 0.1)` | ASP code block background (dark theme) |
+</details>
+
+<details>
+<summary><strong>💡 IntelliSense & Completion</strong></summary>
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `aspLanguageSupport.enableAspCompletion` | `true` | Enable ASP object and VBScript keyword auto-completion |
 </details>
 
 ---
