@@ -410,8 +410,7 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
         if (textBefore.trim().endsWith('<!--') && textAfter.trim().startsWith('-->')) {
             editor.edit(editBuilder => {
                 const endOfLine = line.range.end;
-                editBuilder.delete(new vscode.Range(position, endOfLine));
-                editBuilder.insert(position, `\n${indent}${indentUnit}\n${indent}-->`);
+                editBuilder.replace(new vscode.Range(position, endOfLine), `\n${indent}${indentUnit}\n${indent}-->`);
             }).then(() => {
                 const newPosition = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
                 editor.selection = new vscode.Selection(newPosition, newPosition);
@@ -436,10 +435,10 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
                 if (closingTagRegex.test(textAfterCursor)) {
                     if (textAfter.trim().startsWith(closingTag)) {
                         // Closing tag is right after cursor: <div>|</div>
+                        // Use replace in a single operation to avoid cursor flicker
                         editor.edit(editBuilder => {
                             const endOfLine = line.range.end;
-                            editBuilder.delete(new vscode.Range(position, endOfLine));
-                            editBuilder.insert(position, `\n${indent}${indentUnit}\n${indent}${closingTag}`);
+                            editBuilder.replace(new vscode.Range(position, endOfLine), `\n${indent}${indentUnit}\n${indent}${closingTag}`);
                         }).then(() => {
                             const newPosition = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
                             editor.selection = new vscode.Selection(newPosition, newPosition);
