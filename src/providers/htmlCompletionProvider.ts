@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { HTML_TAGS, isSelfClosingTag } from '../constants/htmlTags';
-import { getAttributesForTag } from '../constants/htmlAttributes';
+import { getAttributesForTag } from '../constants/htmlGlobals';
 import {
     getContext,
     ContextType,
