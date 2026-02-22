@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🛠️ Fixed
 - **Fixed #19** - Resolved incorrect indentation caused by missing inner closing tags in VBScript ([#19](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/19))
+- **Fixed formatter issues** - Resolved various edge cases and improved formatter stability
 
 ---
 
