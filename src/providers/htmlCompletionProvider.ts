@@ -11,25 +11,37 @@ import {
 
 // ── VBScript block keyword constants ───────────────────────────────────────
 
-const VBSCRIPT_BLOCK_OPENERS = /^(If\b.*Then|ElseIf\b.*Then|Else\b|For\b|For\s+Each\b|Do\b|Do\s+While\b|Do\s+Until\b|While\b|Sub\b|Function\b|With\b|Select\s+Case\b|Class\b)/i;
-const VBSCRIPT_BLOCK_CLOSERS = /^(End\s+If\b|End\s+Sub\b|End\s+Function\b|End\s+With\b|End\s+Select\b|End\s+Class\b|Next\b|Loop\b|Wend\b|ElseIf\b|Else\b)/i;
+// Pure openers: start a block, next line should be +1 indent
+const VBSCRIPT_BLOCK_OPENERS = /^(If\b.*Then|For\b|For\s+Each\b|Do\b|Do\s+While\b|Do\s+Until\b|While\b|Sub\b|Function\b|With\b|Select\s+Case\b|Class\b)/i;
 
-// Exact-match regex for auto-snap: line must be ONLY this keyword, nothing else after it
+// Pure closers: end a block, snap back to opener indent level
+const VBSCRIPT_BLOCK_CLOSERS = /^(End\s+If\b|End\s+Sub\b|End\s+Function\b|End\s+With\b|End\s+Select\b|End\s+Class\b|Next\b|Loop\b|Wend\b)/i;
+
+// Mid-block keywords: close the block above AND open a new block below.
+// On Enter they snap to opener level, then give +1 indent on the next line.
+const VBSCRIPT_MID_BLOCK = /^(ElseIf\b|Else\b|Case\b)/i;
+
+// Exact-match regex for auto-snap (onDidChangeTextDocument)
 const VBSCRIPT_EXACT_CLOSER =
-    /^(End\s+If|End\s+Sub|End\s+Function|End\s+With|End\s+Select|End\s+Class|Next|Loop|Wend|ElseIf(?:\s+.*Then)?|Else)$/i;
+    /^(End\s+If|End\s+Sub|End\s+Function|End\s+With|End\s+Select|End\s+Class|Next|Loop|Wend|ElseIf(?:\s+.*Then)?|Else|Case(?:\s+Else)?(?:\s+\S.*)?)$/i;
 
-const CLOSER_TO_OPENER: { closer: RegExp; opener: RegExp }[] = [
-    { closer: /^End\s+If\b/i,       opener: /^If\b.*Then$/i },
+// Maps each closer/mid-block to its matching opener.
+// family: groups mid-block siblings together so End If can skip past ElseIf/Else transparently.
+const CLOSER_TO_OPENER: { closer: RegExp; opener: RegExp; isMidBlock?: boolean; family?: string }[] = [
+    { closer: /^End\s+If\b/i,       opener: /^If\b.*Then$/i,          family: 'if' },
     { closer: /^End\s+Sub\b/i,      opener: /^Sub\b/i },
     { closer: /^End\s+Function\b/i, opener: /^Function\b/i },
     { closer: /^End\s+With\b/i,     opener: /^With\b/i },
-    { closer: /^End\s+Select\b/i,   opener: /^Select\s+Case\b/i },
+    { closer: /^End\s+Select\b/i,   opener: /^Select\s+Case\b/i,      family: 'select' },
     { closer: /^End\s+Class\b/i,    opener: /^Class\b/i },
     { closer: /^Next\b/i,           opener: /^For\b|^For\s+Each\b/i },
     { closer: /^Loop\b/i,           opener: /^Do\b|^Do\s+While\b|^Do\s+Until\b/i },
     { closer: /^Wend\b/i,           opener: /^While\b/i },
-    { closer: /^ElseIf\b/i,         opener: /^If\b.*Then$|^ElseIf\b.*Then$/i },
-    { closer: /^Else\b/i,           opener: /^If\b.*Then$|^ElseIf\b.*Then$/i },
+    // Mid-block If family
+    { closer: /^ElseIf\b/i,         opener: /^If\b.*Then$|^ElseIf\b.*Then$/i, isMidBlock: true, family: 'if' },
+    { closer: /^Else\b/i,           opener: /^If\b.*Then$|^ElseIf\b.*Then$/i, isMidBlock: true, family: 'if' },
+    // Mid-block Select family
+    { closer: /^Case\b/i,           opener: /^Select\s+Case\b/i,              isMidBlock: true, family: 'select' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -67,11 +79,14 @@ function getIndentUnit(editor: vscode.TextEditor): string {
 /**
  * Scans upward to find the indent of the opener matching a given closer keyword.
  *
- * Uses per-type depth tracking with foreign-block shielding:
- * - targetDepth counts unmatched closers of our type
- * - foreignDepth[i] counts unmatched closers of every other type
- * - While inside a foreign block, our target openers AND closers are shielded
- *   (ignored), so they don't affect the count
+ * Handles three kinds of keywords:
+ *   Pure closers  (End If, Next, …)   → scan up until matching opener found
+ *   Mid-block     (ElseIf, Else, Case) → when they ARE the keyword being resolved,
+ *                                         they snap to the same indent as their opener.
+ *                                         When a pure closer (End If) scans past them
+ *                                         they are transparent — depth is unchanged.
+ *   Foreign blocks                     → tracked independently so nesting of a
+ *                                         different block type doesn't confuse the scan.
  */
 function findMatchingOpenerIndent(
     document: vscode.TextDocument,
@@ -81,18 +96,49 @@ function findMatchingOpenerIndent(
     const targetIdx = CLOSER_TO_OPENER.findIndex(p => p.closer.test(closerText));
     if (targetIdx === -1) { return null; }
 
+    const targetEntry = CLOSER_TO_OPENER[targetIdx];
+    const targetIsMid = !!targetEntry.isMidBlock;
+
+    // All mid-block entries in the same family (e.g. ElseIf + Else for 'if', Case for 'select').
+    // When a pure closer (End If) scans past them they are transparent — depth unchanged.
+    // When a mid-block is resolving itself, hitting a same-family sibling is a valid boundary.
+    const familySiblingIndices = targetEntry.family
+        ? CLOSER_TO_OPENER
+            .map((p, i) => ({ p, i }))
+            .filter(({ p, i }) => i !== targetIdx && p.isMidBlock && p.family === targetEntry.family)
+            .map(({ i }) => i)
+        : [];
+
     let targetDepth = 1;
+    // Track unmatched pure closers of foreign block types so we don't miscount
+    // openers that belong to a nested foreign block.
     const foreignDepth: number[] = CLOSER_TO_OPENER.map(() => 0);
 
     for (let i = closerLineIndex - 1; i >= 0; i--) {
         const text = document.lineAt(i).text.trim();
         if (!text) { continue; }
 
+        // ── Closer-side check ──────────────────────────────────────────────
         const closerIdx = CLOSER_TO_OPENER.findIndex(p => p.closer.test(text));
         if (closerIdx !== -1) {
             if (closerIdx === targetIdx) {
                 if (!foreignDepth.some(d => d > 0)) {
+                    if (targetIsMid && targetDepth === 1) {
+                        // Another same-type mid-block at depth 1 is our boundary
+                        // (e.g. ElseIf scanning up hits a previous ElseIf)
+                        const m = document.lineAt(i).text.match(/^(\s*)/);
+                        return m ? m[1] : '';
+                    }
                     targetDepth++;
+                }
+            } else if (familySiblingIndices.includes(closerIdx)) {
+                if (!foreignDepth.some(d => d > 0)) {
+                    if (targetIsMid && targetDepth === 1) {
+                        // Mid-block hit a family sibling → same boundary (e.g. ElseIf hits Else)
+                        const m = document.lineAt(i).text.match(/^(\s*)/);
+                        return m ? m[1] : '';
+                    }
+                    // Pure closer (End If) hits ElseIf/Else → transparent, skip
                 }
             } else {
                 foreignDepth[closerIdx]++;
@@ -100,20 +146,29 @@ function findMatchingOpenerIndent(
             continue;
         }
 
-        const openerIdx = CLOSER_TO_OPENER.findIndex(p => p.opener.test(text));
-        if (openerIdx !== -1) {
-            if (openerIdx === targetIdx) {
-                if (!foreignDepth.some(d => d > 0)) {
-                    targetDepth--;
-                    if (targetDepth === 0) {
-                        const m = document.lineAt(i).text.match(/^(\s*)/);
-                        return m ? m[1] : '';
-                    }
+        // ── Opener-side check ──────────────────────────────────────────────
+        // Match directly against our target's own opener pattern — NOT via findIndex.
+        // findIndex would return the wrong entry when multiple entries share an opener
+        // (e.g. "If condition Then" matches both End-If's opener AND ElseIf's opener,
+        // but findIndex always returns the End-If entry first).
+        if (targetEntry.opener.test(text)) {
+            if (!foreignDepth.some(d => d > 0)) {
+                targetDepth--;
+                if (targetDepth === 0) {
+                    const m = document.lineAt(i).text.match(/^(\s*)/);
+                    return m ? m[1] : '';
                 }
-            } else {
-                if (foreignDepth[openerIdx] > 0) {
-                    foreignDepth[openerIdx]--;
-                }
+            }
+            continue;
+        }
+
+        // Check if this line is a pure opener for a foreign block type so we can
+        // balance its corresponding closer we may have counted above.
+        for (let j = 0; j < CLOSER_TO_OPENER.length; j++) {
+            if (j === targetIdx || familySiblingIndices.includes(j)) { continue; }
+            if (CLOSER_TO_OPENER[j].opener.test(text)) {
+                if (foreignDepth[j] > 0) { foreignDepth[j]--; }
+                break;
             }
         }
     }
@@ -312,8 +367,39 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
                 return;
             }
 
-            // Block closer → snap to matching opener indent, newline at same level.
-            // Done in a single edit to avoid the two-step flicker.
+            // Mid-block keyword (ElseIf, Else, Case, Case Else):
+            // Snap the current line to its opener's indent level, then give +1 on next line.
+            // Always use openerIndent as the base for the next line — even if the current line
+            // failed to snap (e.g. typed without triggering auto-snap), so the body indent is
+            // always openerIndent + 1 regardless of where the mid-block line physically sits.
+            if (VBSCRIPT_MID_BLOCK.test(currentLineText)) {
+                const openerIndent = findMatchingOpenerIndent(document, position.line, currentLineText);
+                const targetIndent = openerIndent !== null ? openerIndent : indent;
+                const bodyIndent   = targetIndent + indentUnit;
+
+                if (targetIndent !== indent) {
+                    // Current line is at the wrong indent — fix it and set cursor
+                    const lineEnd = new vscode.Position(position.line, indent.length + currentLineText.length);
+                    editor.edit(eb => {
+                        eb.replace(
+                            new vscode.Range(new vscode.Position(position.line, 0), lineEnd),
+                            `${targetIndent}${currentLineText}\n${bodyIndent}`
+                        );
+                    }).then(() => {
+                        const p = new vscode.Position(position.line + 1, bodyIndent.length);
+                        editor.selection = new vscode.Selection(p, p);
+                    });
+                } else {
+                    editor.edit(eb => eb.insert(position, `\n${bodyIndent}`)).then(() => {
+                        const p = new vscode.Position(position.line + 1, bodyIndent.length);
+                        editor.selection = new vscode.Selection(p, p);
+                    });
+                }
+                return;
+            }
+
+            // Pure block closer (End If, Next, Loop, Wend, …):
+            // Snap current line to opener indent, newline at same level.
             if (VBSCRIPT_BLOCK_CLOSERS.test(currentLineText)) {
                 const openerIndent = findMatchingOpenerIndent(document, position.line, currentLineText);
                 const targetIndent = openerIndent !== null ? openerIndent : indent;
