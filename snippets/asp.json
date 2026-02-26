@@ -46,29 +46,29 @@
     "Database Connection": {
         "prefix": "dbconn",
         "body": [
-            "Dim conn, rs",
-            "Set conn = Server.CreateObject(\"ADODB.Connection\")",
-            "conn.Open \"${1:connectionString}\"",
+            "Dim ${1:conn}",
+            "Set ${1:conn} = Server.CreateObject(\"ADODB.Connection\")",
+            "${1:conn}.Open \"${2:connectionString}\"",
             "$0",
-            "conn.Close",
-            "Set conn = Nothing"
+            "${1:conn}.Close",
+            "Set ${1:conn} = Nothing"
         ],
-        "description": "Database connection template"
+        "description": "Database connection template — type your connection variable name once and it updates everywhere"
     },
     "Recordset": {
         "prefix": "rs",
         "body": [
-            "Dim rs",
-            "Set rs = Server.CreateObject(\"ADODB.Recordset\")",
-            "rs.Open \"${1:SQL}\", conn",
-            "Do While Not rs.EOF",
+            "Dim ${1:rs}",
+            "Set ${1:rs} = Server.CreateObject(\"ADODB.Recordset\")",
+            "${1:rs}.Open \"${2:SQL}\", ${3:conn}",
+            "Do While Not ${1:rs}.EOF",
             "\t$0",
-            "\trs.MoveNext",
+            "\t${1:rs}.MoveNext",
             "Loop",
-            "rs.Close",
-            "Set rs = Nothing"
+            "${1:rs}.Close",
+            "Set ${1:rs} = Nothing"
         ],
-        "description": "ADO Recordset template"
+        "description": "ADO Recordset template — type your recordset variable name once and it updates everywhere"
     },
     "Option Explicit": {
         "prefix": "opt",
