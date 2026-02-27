@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ASP_OBJECTS, VBSCRIPT_KEYWORDS, VBSCRIPT_FUNCTIONS } from '../constants/aspKeywords';
 import { getContext, ContextType, getTextBeforeCursor } from '../utils/documentHelper';
+import { collectAllSymbols } from './includeProvider';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Known COM object type definitions
@@ -139,85 +140,27 @@ const COM_TYPE_MAP: Record<string, { label: string; members: { name: string; doc
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scans the full document text and builds a map of:
-//   variableName (lowercase) → COM type key (lowercase ProgID)
-//
-// Patterns detected:
-//   Set rs = Server.CreateObject("ADODB.Recordset")
-//   Set conn = CreateObject("ADODB.Connection")
+// Builds a variable → progId map from the combined symbols
+// (current doc + all include files), used for dot-access member completions.
 // ─────────────────────────────────────────────────────────────────────────────
-function buildVariableTypeMap(documentText: string): Map<string, string> {
+function buildComVarMap(documentText: string, includeComVars: { name: string; progId: string }[]): Map<string, string> {
     const map = new Map<string, string>();
 
-    // Matches:  Set <varName> = [Server.]CreateObject("<ProgID>")
+    // From the current document text directly
     const pattern = /\bSet\s+(\w+)\s*=\s*(?:Server\.)?CreateObject\s*\(\s*["']([^"']+)["']\s*\)/gi;
     let match: RegExpExecArray | null;
-
     while ((match = pattern.exec(documentText)) !== null) {
-        const varName = match[1].toLowerCase();
-        const progId  = match[2].toLowerCase();
-        if (COM_TYPE_MAP[progId]) {
-            map.set(varName, progId);
+        map.set(match[1].toLowerCase(), match[2].toLowerCase());
+    }
+
+    // From include files (already parsed by collectAllSymbols)
+    for (const cv of includeComVars) {
+        if (!map.has(cv.name.toLowerCase())) {
+            map.set(cv.name.toLowerCase(), cv.progId);
         }
     }
 
     return map;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Scans the document and collects user-defined symbols:
-//   • Variables from:  Dim x, Const x =, ReDim x, Public x, Private x
-//   • Functions/Subs:  Function Foo(...) / Sub Bar(...)
-// Returns CompletionItems for each unique symbol.
-// ─────────────────────────────────────────────────────────────────────────────
-function buildUserSymbolCompletions(documentText: string): vscode.CompletionItem[] {
-    const symbols = new Map<string, vscode.CompletionItem>();
-
-    // --- Dim / ReDim / Public / Private / Const variable declarations ---
-    // Matches the whole list after the keyword:  Dim a, b, c
-    const dimPattern = /\b(?:Dim|ReDim|Public|Private|Const)\s+([\w,\s]+?)(?=\s*(?:'|$|=|\n))/gi;
-    let match: RegExpExecArray | null;
-
-    while ((match = dimPattern.exec(documentText)) !== null) {
-        // Split on commas in case of  Dim a, b, c
-        const names = match[1].split(',').map(s => s.trim()).filter(Boolean);
-        for (const name of names) {
-            if (!name || symbols.has(name.toLowerCase())) continue;
-            const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Variable);
-            item.detail = 'Local variable (Dim)';
-            item.documentation = new vscode.MarkdownString(`**${name}** — declared in this file`);
-            item.sortText = '2_' + name; // Sort after built-ins
-            item.preselect = false;
-            symbols.set(name.toLowerCase(), item);
-        }
-    }
-
-    // --- Function and Sub declarations ---
-    const funcPattern = /\b(Function|Sub)\s+(\w+)\s*\(([^)]*)\)/gi;
-    while ((match = funcPattern.exec(documentText)) !== null) {
-        const kind   = match[1];   // "Function" or "Sub"
-        const name   = match[2];
-        const params = match[3].trim();
-
-        if (symbols.has(name.toLowerCase())) continue;
-
-        const item = new vscode.CompletionItem(
-            name,
-            kind.toLowerCase() === 'function'
-                ? vscode.CompletionItemKind.Function
-                : vscode.CompletionItemKind.Function
-        );
-        item.detail = `${kind} ${name}(${params})`;
-        item.documentation = new vscode.MarkdownString(`**${name}** — defined in this file\n\n\`${kind} ${name}(${params})\``);
-        item.insertText = params
-            ? new vscode.SnippetString(`${name}($0)`)
-            : new vscode.SnippetString(`${name}()`);
-        item.sortText = '2_' + name;
-        item.preselect = false;
-        symbols.set(name.toLowerCase(), item);
-    }
-
-    return Array.from(symbols.values());
 }
 
 export class AspCompletionProvider implements vscode.CompletionItemProvider {
@@ -241,15 +184,26 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             return [];
         }
 
-        const textBefore    = getTextBeforeCursor(document, position);
-        const documentText  = document.getText();
+        const textBefore   = getTextBeforeCursor(document, position);
+        const documentText = document.getText();
+        const lineText     = document.lineAt(position.line).text.substring(0, position.character);
         const completions: vscode.CompletionItem[] = [];
 
-        // ── 1. Object member access  e.g. "rs."  or "Response." ─────────────
-        // We check for any word followed by a dot at end of line.
-        const dotAccessMatch = textBefore.match(/\b(\w+)\.\s*$/);
+        // If triggered by a space, only continue if we're in a "Call " context.
+        // This prevents the suggestion list popping up on every single space the user types.
+        if (context.triggerCharacter === ' ' && !/\bCall\s+$/i.test(lineText)) {
+            return [];
+        }
+
+        // Collect all symbols from this document + any included files
+        const allSymbols = collectAllSymbols(document);
+        const comVarMap  = buildComVarMap(documentText, allSymbols.comVariables);
+
+        // ── 1. Object member access  e.g. "rs."  or "rs.EO" ─────────────────
+        // Matches:  word.  OR  word.partialword  (both need member completions)
+        const dotAccessMatch = lineText.match(/\b(\w+)\.(\w*)$/);
         if (dotAccessMatch) {
-            const varName = dotAccessMatch[1];
+            const varName    = dotAccessMatch[1];
 
             // 1a. Built-in ASP objects (Response, Request, etc.)
             if (/^(Response|Request|Server|Session|Application)$/i.test(varName)) {
@@ -257,37 +211,16 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             }
 
             // 1b. User variable with a known COM type (rs., conn., dict., etc.)
-            const varTypeMap = buildVariableTypeMap(documentText);
-            const progId     = varTypeMap.get(varName.toLowerCase());
+            const progId = comVarMap.get(varName.toLowerCase());
             if (progId && COM_TYPE_MAP[progId]) {
                 return this.provideComObjectMembers(varName, progId);
             }
 
-            // 1c. Unknown object — return empty so we don't pollute with keywords
+            // 1c. Unknown object — return empty so keywords don't pollute
             return [];
         }
 
-        // ── 2. FIX: suppress keyword/snippet completions after a dot ─────────
-        // If the cursor is anywhere after a dot expression on the same logical
-        // expression (e.g.  "rs.EOF" mid-word), don't offer keywords.
-        // The dot-access branch above already returns early, but this guard
-        // catches edge cases where the dot is further back.
-        const lineText = document.lineAt(position.line).text.substring(0, position.character);
-        const afterDotMatch = lineText.match(/\b(\w+)\.\w*$/);
-        if (afterDotMatch) {
-            const varName = afterDotMatch[1];
-            if (/^(Response|Request|Server|Session|Application)$/i.test(varName)) {
-                return this.provideMethodCompletions(varName);
-            }
-            const varTypeMap = buildVariableTypeMap(documentText);
-            const progId = varTypeMap.get(varName.toLowerCase());
-            if (progId && COM_TYPE_MAP[progId]) {
-                return this.provideComObjectMembers(varName, progId);
-            }
-            return [];
-        }
-
-        // ── 3. Normal ASP context completions ────────────────────────────────
+        // ── 2. Normal ASP context completions ────────────────────────────────
 
         // Don't expand "If/Sub/Function" snippets when the user typed "End ..."
         const isAfterEnd = /\bend\s+i?f?$/i.test(textBefore.trim());
@@ -296,8 +229,142 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
         completions.push(...this.provideKeywordCompletions(isAfterEnd));
         completions.push(...this.provideFunctionCompletions());
 
-        // ── 4. User-defined variables and functions from this document ────────
-        completions.push(...buildUserSymbolCompletions(documentText));
+        // ── 3. User-defined symbols (current doc + include files) ─────────────
+
+        // Variables (Dim)
+        // Skip any Dim'd variable that also has a Set CreateObject entry —
+        // the COM variable entry below already represents it with richer type info.
+        const seenVars = new Set<string>();
+        for (const v of allSymbols.variables) {
+            if (seenVars.has(v.name.toLowerCase())) continue;
+            seenVars.add(v.name.toLowerCase());
+
+            // If this variable is also a COM object (Set x = CreateObject(...)),
+            // skip it here — the COM variables section will show it with type info.
+            if (comVarMap.has(v.name.toLowerCase())) continue;
+
+            const item = new vscode.CompletionItem(v.name, vscode.CompletionItemKind.Variable);
+            const fromInclude = v.filePath !== document.uri.fsPath;
+            item.detail       = fromInclude ? `Variable (from ${require('path').basename(v.filePath)})` : 'Variable (Dim)';
+            item.documentation = new vscode.MarkdownString(`**${v.name}** — ${fromInclude ? 'included variable' : 'declared in this file'}`);
+            item.sortText     = '2_' + v.name;
+            item.preselect    = false;
+            completions.push(item);
+        }
+
+        // Constants (Const)
+        const seenConsts = new Set<string>();
+        for (const c of allSymbols.constants) {
+            if (seenConsts.has(c.name.toLowerCase())) continue;
+            seenConsts.add(c.name.toLowerCase());
+
+            const item = new vscode.CompletionItem(c.name, vscode.CompletionItemKind.Constant);
+            const fromInclude = c.filePath !== document.uri.fsPath;
+            item.detail       = `Const = ${c.value}${fromInclude ? ` (from ${require('path').basename(c.filePath)})` : ''}`;
+            item.documentation = new vscode.MarkdownString(`**${c.name}** = \`${c.value}\``);
+            item.sortText     = '2_' + c.name;
+            item.preselect    = false;
+            completions.push(item);
+        }
+
+        // Functions and Subs
+        // VBScript calling convention rules:
+        //
+        //   Without Call keyword:
+        //     Sub, no params   -> ConnectDb                  (no parens)
+        //     Sub, with params -> ConnectDb arg1, arg2       (space-separated, NO parens)
+        //     Function         -> result = MyFunc(arg)       (parens, return value assigned)
+        //
+        //   With Call keyword (user already typed "Call "):
+        //     Sub, no params   -> Call ConnectDb             (no parens)
+        //     Sub, with params -> Call MySub(arg1, arg2)     (parens required by VBScript)
+        //     Function         -> Call MyFunc(arg)           (parens required)
+        //
+        //   Special edge case: Sub with exactly ONE param without Call ->
+        //     MySub(arg) technically works but passes arg ByVal, not ByRef.
+        //     We still insert without parens to be safe and consistent.
+        //
+        // Detect if the user is in a "Call ..." context on this line.
+        // We check the current line text (not textBefore which may be multiline)
+        // and match either:
+        //   "Call "           (just typed Call and a space)
+        //   "Call SomeName"   (typing the sub name after Call)
+        const isAfterCall = /\bCall\s+\w*$/i.test(lineText);
+
+        const seenFuncs = new Set<string>();
+        for (const fn of allSymbols.functions) {
+            if (seenFuncs.has(fn.name.toLowerCase())) continue;
+            seenFuncs.add(fn.name.toLowerCase());
+
+            const isSub       = fn.kind === 'Sub';
+            const hasParams   = fn.params.trim().length > 0;
+            const fromInclude = fn.filePath !== document.uri.fsPath;
+
+            // Build param snippet list e.g.  ${1:name}, ${2:value}
+            const paramSnippet = fn.params.split(',').map((p, i) =>
+                `\${${i + 1}:${p.trim()}}`
+            ).join(', ');
+
+            const item = new vscode.CompletionItem(fn.name, vscode.CompletionItemKind.Function);
+            item.detail = `${fn.kind} ${fn.name}${hasParams ? `(${fn.params})` : ''}${fromInclude ? ` — from ${require('path').basename(fn.filePath)}` : ''}`;
+            item.documentation = new vscode.MarkdownString(
+                `**${fn.name}** — ${fromInclude ? 'included' : 'defined in this file'}\n\n` +
+                `\`${fn.kind} ${fn.name}${hasParams ? `(${fn.params})` : ''}\``
+            );
+
+            if (isAfterCall) {
+                // User typed "Call " — parens required for any params
+                if (!hasParams) {
+                    // Call ConnectDb  (no parens when no args)
+                    item.insertText = fn.name;
+                } else {
+                    // Call MySub(arg1, arg2)
+                    item.insertText = new vscode.SnippetString(`${fn.name}(${paramSnippet})`);
+                }
+            } else if (isSub) {
+                // No Call, Sub — never use parens around the argument list
+                if (!hasParams) {
+                    item.insertText = fn.name;
+                } else {
+                    // ConnectDb arg1, arg2
+                    item.insertText = new vscode.SnippetString(`${fn.name} ${paramSnippet}`);
+                }
+            } else {
+                // No Call, Function — always parens (return value expected)
+                if (!hasParams) {
+                    item.insertText = new vscode.SnippetString(`${fn.name}()`);
+                } else {
+                    item.insertText = new vscode.SnippetString(`${fn.name}(${paramSnippet})`);
+                }
+            }
+
+            item.sortText  = '2_' + fn.name;
+            item.preselect = false;
+            completions.push(item);
+        }
+
+        // COM object variable names (Set rs = ...) — suggest the variable name itself
+        const seenCom = new Set<string>();
+        for (const cv of allSymbols.comVariables) {
+            if (seenCom.has(cv.name.toLowerCase())) continue;
+            seenCom.add(cv.name.toLowerCase());
+
+            const typeDef     = COM_TYPE_MAP[cv.progId];
+            const fromInclude = cv.filePath !== document.uri.fsPath;
+            const item = new vscode.CompletionItem(cv.name, vscode.CompletionItemKind.Variable);
+            item.detail       = typeDef
+                ? `${typeDef.label}${fromInclude ? ` (from ${require('path').basename(cv.filePath)})` : ''}`
+                : `Object${fromInclude ? ` (from ${require('path').basename(cv.filePath)})` : ''}`;
+            item.documentation = typeDef
+                ? new vscode.MarkdownString(`**${cv.name}** — \`${typeDef.label}\`\n\nType \`${cv.name}.\` to see members.`)
+                : new vscode.MarkdownString(`**${cv.name}** — COM object variable`);
+            item.sortText     = '2_' + cv.name;
+            item.preselect    = false;
+
+            // Trigger member suggestions after accepting this variable
+            item.command = { command: 'editor.action.triggerSuggest', title: 'Suggest members' };
+            completions.push(item);
+        }
 
         return completions;
     }
@@ -312,14 +379,8 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
                 `**Methods/Properties:** ${obj.methods.join(', ')}`
             );
             item.preselect = false;
-            item.sortText = '1_' + obj.name;
-
-            // Trigger member suggestions after typing the object name
-            item.command = {
-                command: 'editor.action.triggerSuggest',
-                title: 'Trigger Method Suggestions'
-            };
-
+            item.sortText  = '1_' + obj.name;
+            item.command   = { command: 'editor.action.triggerSuggest', title: 'Trigger Method Suggestions' };
             return item;
         });
     }
@@ -331,19 +392,13 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
 
         return typeDef.members.map(member => {
             const item = new vscode.CompletionItem(member.name, vscode.CompletionItemKind.Property);
-            item.detail  = `${varName}.${member.name}  [${typeDef.label}]`;
-            item.documentation = new vscode.MarkdownString(
-                `**${typeDef.label}.${member.name}**\n\n${member.doc}`
-            );
-
-            if (member.snippet) {
-                item.insertText = new vscode.SnippetString(member.snippet);
-            } else {
-                item.insertText = member.name;
-            }
-
-            item.preselect = false;
-            item.sortText  = '0_' + member.name;
+            item.detail       = `${varName}.${member.name}  [${typeDef.label}]`;
+            item.documentation = new vscode.MarkdownString(`**${typeDef.label}.${member.name}**\n\n${member.doc}`);
+            item.insertText   = member.snippet
+                ? new vscode.SnippetString(member.snippet)
+                : member.name;
+            item.preselect    = false;
+            item.sortText     = '0_' + member.name;
             return item;
         });
     }
@@ -353,107 +408,97 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
         const aspObject = ASP_OBJECTS.find(obj =>
             obj.name.toLowerCase() === objectName.toLowerCase()
         );
+        if (!aspObject) return [];
 
-        if (!aspObject) {
-            return [];
-        }
-
-        const completions: vscode.CompletionItem[] = [];
-
-        for (const method of aspObject.methods) {
+        return aspObject.methods.map(method => {
             const item = new vscode.CompletionItem(method, vscode.CompletionItemKind.Method);
             item.detail = `${objectName}.${method}`;
 
-            // Add specific documentation and snippets for common methods
             switch (method) {
                 case 'Write':
                     item.documentation = 'Write output to the client';
-                    item.insertText = new vscode.SnippetString('Write($0)');
+                    item.insertText    = new vscode.SnippetString('Write($0)');
                     break;
                 case 'Redirect':
                     item.documentation = 'Redirect to another URL';
-                    item.insertText = new vscode.SnippetString('Redirect("$0")');
+                    item.insertText    = new vscode.SnippetString('Redirect("$0")');
                     break;
                 case 'Form':
                     item.documentation = 'Get form data';
-                    item.insertText = new vscode.SnippetString('Form("$0")');
+                    item.insertText    = new vscode.SnippetString('Form("$0")');
                     break;
                 case 'QueryString':
                     item.documentation = 'Get query string parameter';
-                    item.insertText = new vscode.SnippetString('QueryString("$0")');
+                    item.insertText    = new vscode.SnippetString('QueryString("$0")');
                     break;
                 case 'CreateObject':
                     item.documentation = 'Create a COM object';
-                    item.insertText = new vscode.SnippetString('CreateObject("$0")');
+                    item.insertText    = new vscode.SnippetString('CreateObject("$0")');
                     break;
                 case 'MapPath':
                     item.documentation = 'Map virtual path to physical path';
-                    item.insertText = new vscode.SnippetString('MapPath("$0")');
+                    item.insertText    = new vscode.SnippetString('MapPath("$0")');
                     break;
                 case 'HTMLEncode':
                     item.documentation = 'Encode HTML special characters';
-                    item.insertText = new vscode.SnippetString('HTMLEncode($0)');
+                    item.insertText    = new vscode.SnippetString('HTMLEncode($0)');
                     break;
                 case 'URLEncode':
                     item.documentation = 'Encode URL special characters';
-                    item.insertText = new vscode.SnippetString('URLEncode($0)');
+                    item.insertText    = new vscode.SnippetString('URLEncode($0)');
                     break;
                 default:
                     item.documentation = `${objectName}.${method} method`;
-                    item.insertText = method;
+                    item.insertText    = method;
             }
 
             item.preselect = false;
-            item.sortText = '0_' + method;
-            completions.push(item);
-        }
-
-        return completions;
+            item.sortText  = '0_' + method;
+            return item;
+        });
     }
 
     // ── VBScript keyword completions ──────────────────────────────────────────
     private provideKeywordCompletions(isAfterEnd: boolean = false): vscode.CompletionItem[] {
         return VBSCRIPT_KEYWORDS.map(kw => {
             const item = new vscode.CompletionItem(kw.keyword, vscode.CompletionItemKind.Keyword);
-            item.detail = kw.description;
+            item.detail       = kw.description;
             item.documentation = new vscode.MarkdownString(`**${kw.keyword}**\n\n${kw.description}`);
 
-            // Don't show control structure snippets if after "End"
             if (isAfterEnd && (kw.keyword === 'If' || kw.keyword === 'Sub' || kw.keyword === 'Function' || kw.keyword === 'Select Case')) {
                 item.preselect = false;
-                item.sortText = '1_' + kw.keyword;
+                item.sortText  = '1_' + kw.keyword;
                 return item;
             }
 
-            // Add snippets for control structures
             if (kw.keyword === 'If') {
                 item.insertText = new vscode.SnippetString('If ${1:condition} Then\n\t$0\nEnd If');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             } else if (kw.keyword === 'For') {
                 item.insertText = new vscode.SnippetString('For ${1:i} = ${2:0} To ${3:10}\n\t$0\nNext');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             } else if (kw.keyword === 'For Each') {
                 item.insertText = new vscode.SnippetString('For Each ${1:item} In ${2:collection}\n\t$0\nNext');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             } else if (kw.keyword === 'While') {
                 item.insertText = new vscode.SnippetString('While ${1:condition}\n\t$0\nWend');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             } else if (kw.keyword === 'Do') {
                 item.insertText = new vscode.SnippetString('Do\n\t$0\nLoop');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             } else if (kw.keyword === 'Select Case') {
                 item.insertText = new vscode.SnippetString('Select Case ${1:expression}\n\tCase ${2:value}\n\t\t$0\nEnd Select');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             } else if (kw.keyword === 'Sub') {
                 item.insertText = new vscode.SnippetString('Sub ${1:SubName}(${2:parameters})\n\t$0\nEnd Sub');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             } else if (kw.keyword === 'Function') {
                 item.insertText = new vscode.SnippetString('Function ${1:FunctionName}(${2:parameters})\n\t$0\nEnd Function');
-                item.kind = vscode.CompletionItemKind.Snippet;
+                item.kind       = vscode.CompletionItemKind.Snippet;
             }
 
             item.preselect = false;
-            item.sortText = (item.insertText ? '0_' : '1_') + kw.keyword;
+            item.sortText  = (item.insertText ? '0_' : '1_') + kw.keyword;
             return item;
         });
     }
@@ -462,11 +507,11 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
     private provideFunctionCompletions(): vscode.CompletionItem[] {
         return VBSCRIPT_FUNCTIONS.map(func => {
             const item = new vscode.CompletionItem(func, vscode.CompletionItemKind.Function);
-            item.detail = `VBScript function`;
+            item.detail       = `VBScript function`;
             item.documentation = new vscode.MarkdownString(`**${func}()** - VBScript built-in function`);
-            item.insertText = new vscode.SnippetString(`${func}($0)`);
-            item.preselect = false;
-            item.sortText = '0_' + func;
+            item.insertText   = new vscode.SnippetString(`${func}($0)`);
+            item.preselect    = false;
+            item.sortText     = '0_' + func;
             return item;
         });
     }
