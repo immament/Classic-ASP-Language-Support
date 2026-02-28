@@ -43,6 +43,7 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         const text       = document.getText();
         const allSymbols = collectAllSymbols(document);
 
+
         // ── Build fast lookup sets / maps ─────────────────────────────────────
 
         // Function names → token type
@@ -110,8 +111,22 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             const trimmed = line.trimStart();
             if (trimmed.startsWith("'") || /^rem\s/i.test(trimmed)) return;
 
-            // Strip string contents so we don't highlight words inside strings
-            const strippedLine = line.replace(/"[^"]*"/g, (m: string) => ' '.repeat(m.length));
+            // Process the line in two stages to avoid touching comment regions:
+            //
+            // Stage 1 — replace string contents with spaces (preserves column positions
+            //            for accurate builder.push calls, and neutralises any apostrophe
+            //            inside a string that might look like a comment delimiter).
+            //
+            // Stage 2 — TRUNCATE at the first bare apostrophe (inline comment start).
+            //            We truncate rather than blank so the semantic provider never
+            //            emits tokens into the comment region, letting tmLanguage keep
+            //            full control of comment colouring.
+            let strippedLine = line.replace(/"[^"]*"/g, (m: string) => ' '.repeat(m.length));
+            const commentIdx = strippedLine.indexOf("'");
+            if (commentIdx !== -1) {
+                // Truncate — only scan up to the comment start
+                strippedLine = strippedLine.substring(0, commentIdx);
+            }
 
             // Get the params active on this line (if any)
             const activeParams = lineParamSets.get(lineIndex);

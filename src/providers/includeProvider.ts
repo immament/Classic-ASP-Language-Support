@@ -44,7 +44,8 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
     lines.forEach((line, lineIndex) => {
 
         // ── Dim / ReDim / Public / Private ───────────────────────────────────
-        const dimMatch = line.match(/^\s*(?:Dim|ReDim|Public|Private)\s+([\w,\s]+?)(?:\s*(?:'|=|$))/i);
+        // Match everything after the keyword up to an optional comment or end-of-line.
+        const dimMatch = line.match(/^\s*(?:Dim|ReDim|Public|Private)\s+([\w,\s]+?)\s*(?:'|$)/i);
         if (dimMatch) {
             const names = dimMatch[1].split(',').map((s: string) => s.trim()).filter(Boolean);
             for (const name of names) {
@@ -52,8 +53,30 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
             }
         }
 
+        // ── Implicit variables — plain assignment without Dim ─────────────────
+        // VBScript allows undeclared variables when Option Explicit is NOT used.
+        // We detect  "word ="  at the start of a line (skipping Set, For, Const lines
+        // which have their own handlers) and register the LHS as a variable so the
+        // semantic provider can colour its usages throughout the file.
+        // We skip names already registered to avoid duplicates.
+        const implicitMatch = line.match(/^\s*([a-zA-Z_]\w*)\s*=/i);
+        if (implicitMatch) {
+            const name = implicitMatch[1];
+            const nameLower = name.toLowerCase();
+            // Skip keywords and already-handled constructs
+            const skipWords = new Set([
+                'dim','redim','set','const','if','for','while','do',
+                'function','sub','class','select','with','on','option',
+            ]);
+            if (!skipWords.has(nameLower) && !result.variables.some(v => v.name.toLowerCase() === nameLower)) {
+                result.variables.push({ name, line: lineIndex, filePath });
+            }
+        }
+
         // ── Const ─────────────────────────────────────────────────────────────
-        const constMatch = line.match(/^\s*(?:Public\s+|Private\s+)?Const\s+(\w+)\s*=\s*(.+?)(?:\s*'|$)/i);
+        // Greedy value capture (.+) so the full value is captured before an optional comment.
+        // The trailing /i flag keeps case-insensitive matching for 'Const' keyword.
+        const constMatch = line.match(/^\s*(?:Public\s+|Private\s+)?Const\s+(\w+)\s*=\s*(.+?)\s*(?:'.*)?$/i);
         if (constMatch) {
             result.constants.push({
                 name:     constMatch[1],
