@@ -416,77 +416,136 @@ function extractSqlGroup(
     startCol: number
 ): SqlStringGroup | null {
 
-    const lineCount  = document.lineCount;
+    // ── Overview ──────────────────────────────────────────────────────────────
+    // VBScript SQL strings are often split across multiple string literals
+    // joined with & and variable concatenations, e.g.:
+    //
+    //   sql = "SELECT * FROM Users WHERE Name = '" & name & "' AND Id = " & id & _
+    //         " ORDER BY Name"
+    //
+    // We collect ALL string literal fragments (the parts inside double-quotes)
+    // and stitch them together so SQL detection and colouring works across the
+    // full query — skipping over the variable parts in between.
+    //
+    // Strategy:
+    //   1. Read the first string fragment starting at startCol.
+    //   2. After the closing quote, scan the rest of the line for more "..."
+    //      fragments, skipping over & variable & gaps.
+    //   3. If the line ends with & _ (with optional comment), move to the next
+    //      line and repeat from step 2.
+    //   4. Stop when we hit a line that doesn't end with & _ or when we can't
+    //      find any more string fragments.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    const lineCount = document.lineCount;
     const segments: SqlStringSegment[] = [];
-    let   stitched   = '';
+    let   stitched  = '';
     const offsetMap: Array<{lineIndex: number; col: number}> = [];
 
-    const firstLine  = document.lineAt(startLine).text;
-    let col          = startCol + 1;
-    const firstStart = col;
-    let content      = '';
-
-    while (col < firstLine.length) {
-        if (firstLine[col] === '"') {
-            if (col + 1 < firstLine.length && firstLine[col + 1] === '"') {
-                content += '"'; col += 2;
-            } else { break; }
-        } else {
-            content += firstLine[col++];
+    // Helper: read one "..." string fragment at lineText[col] (opening quote).
+    function readFragment(lineText: string, col: number): {
+        content: string; colStart: number; colEnd: number; nextCol: number;
+    } | null {
+        if (col >= lineText.length || lineText[col] !== '"') { return null; }
+        col++;
+        const colStart = col;
+        let content = '';
+        while (col < lineText.length) {
+            if (lineText[col] === '"') {
+                if (col + 1 < lineText.length && lineText[col + 1] === '"') {
+                    content += '"'; col += 2;
+                } else { break; }
+            } else {
+                content += lineText[col++];
+            }
         }
+        if (col >= lineText.length) { return null; }
+        return { content, colStart, colEnd: col, nextCol: col + 1 };
     }
-    if (col >= firstLine.length) { return null; }
 
-    segments.push({ lineIndex: startLine, lineText: firstLine, colStart: firstStart, colEnd: col });
-    for (let c = firstStart; c < col; c++) {
-        offsetMap.push({ lineIndex: startLine, col: c });
+    // Helper: append a fragment to stitched + offsetMap.
+    function appendFragment(lineIndex: number, lineText: string, frag: {
+        content: string; colStart: number; colEnd: number;
+    }): void {
+        if (stitched.length > 0) {
+            offsetMap.push({ lineIndex, col: frag.colStart });
+            stitched += ' ';
+        }
+        for (let c = frag.colStart; c < frag.colEnd; c++) {
+            offsetMap.push({ lineIndex, col: c });
+        }
+        stitched += frag.content;
+        segments.push({ lineIndex, lineText, colStart: frag.colStart, colEnd: frag.colEnd });
     }
-    stitched += content;
+
+    // Helper: check if the rest of a line after col ends with & _
+    function lineEndsWithContinuation(lineText: string, col: number): boolean {
+        let rest = lineText.substring(col).trimEnd();
+        const cp = rest.indexOf("'");
+        if (cp !== -1) { rest = rest.substring(0, cp).trimEnd(); }
+        return /&\s*_$/.test(rest);
+    }
+
+    // Helper: advance past & variable & gaps looking for the next opening quote.
+    // Returns the col of the next " or -1 if none found before EOL.
+    // Note: we do NOT treat ' as a comment here because SQL strings commonly
+    // contain single quotes (e.g. WHERE x = '...') inside the variable gaps.
+    function findNextQuote(lineText: string, col: number): number {
+        while (col < lineText.length && lineText[col] === ' ') { col++; }
+        // Handle continuation lines that start directly with a quote (no & before it)
+        if (col < lineText.length && lineText[col] === '"') { return col; }
+        if (col >= lineText.length || lineText[col] !== '&') { return -1; }
+        col++;
+        let depth = 0;
+        while (col < lineText.length) {
+            const ch = lineText[col];
+            if (ch === '(') { depth++; col++; continue; }
+            if (ch === ')') { depth--; col++; continue; }
+            if (depth === 0 && ch === '"') { return col; }
+            if (depth === 0 && ch === '&') {
+                col++;
+                while (col < lineText.length && lineText[col] === ' ') { col++; }
+                if (col < lineText.length && lineText[col] === '"') { return col; }
+                continue;
+            }
+            col++;
+        }
+        return -1;
+    }
+
+    // ── Step 1: read the first fragment ──────────────────────────────────────
+    const firstLine = document.lineAt(startLine).text;
+    const firstFrag = readFragment(firstLine, startCol);
+    if (!firstFrag) { return null; }
+
+    appendFragment(startLine, firstLine, firstFrag);
 
     let scanLine = startLine;
     let scanText = firstLine;
-    let scanCol  = col + 1;
+    let scanCol  = firstFrag.nextCol;
 
+    // ── Steps 2–4: keep scanning for more fragments ───────────────────────────
     while (true) {
-        const rest       = scanText.substring(scanCol).trimEnd();
-        const commentPos = rest.indexOf("'");
-        const effective  = commentPos !== -1 ? rest.substring(0, commentPos).trimEnd() : rest;
-        if (!/&\s*_$/.test(effective)) { break; }
+        // Look for more string fragments on the current line after & var & gaps
+        const nextQuoteCol = findNextQuote(scanText, scanCol);
+        if (nextQuoteCol !== -1) {
+            const frag = readFragment(scanText, nextQuoteCol);
+            if (frag) {
+                appendFragment(scanLine, scanText, frag);
+                scanCol = frag.nextCol;
+                continue;
+            }
+        }
+
+        // No more fragments on this line — check for & _ continuation
+        if (!lineEndsWithContinuation(scanText, scanCol)) { break; }
 
         scanLine++;
         if (scanLine >= lineCount) { break; }
 
-        const nextText    = document.lineAt(scanLine).text;
-        const nextTrimmed = nextText.trimStart();
-        const indent      = nextText.length - nextTrimmed.length;
-        if (!nextTrimmed.startsWith('"')) { break; }
-
-        let nCol     = indent + 1;
-        const nStart = nCol;
-        let nContent = '';
-
-        while (nCol < nextText.length) {
-            if (nextText[nCol] === '"') {
-                if (nCol + 1 < nextText.length && nextText[nCol + 1] === '"') {
-                    nContent += '"'; nCol += 2;
-                } else { break; }
-            } else {
-                nContent += nextText[nCol++];
-            }
-        }
-
-        segments.push({ lineIndex: scanLine, lineText: nextText, colStart: nStart, colEnd: nCol });
-        // The space we insert between continuation fragments maps to no real doc position.
-        // We push a placeholder so indices stay aligned, pointing at the join point.
-        offsetMap.push({ lineIndex: scanLine, col: nStart });
-        stitched += ' ';
-        for (let c = nStart; c < nCol; c++) {
-            offsetMap.push({ lineIndex: scanLine, col: c });
-        }
-        stitched += nContent;
-
-        scanText = nextText;
-        scanCol  = nCol + 1;
+        scanText = document.lineAt(scanLine).text;
+        scanCol  = 0;
+        while (scanCol < scanText.length && scanText[scanCol] === ' ') { scanCol++; }
     }
 
     if (!isSql(stitched)) { return null; }
