@@ -31,8 +31,10 @@ import { isInsideAspBlock } from '../utils/documentHelper';
 //                         maps to → constant.numeric.sql
 //  13  sqlBracketPunct  → the [ and ] characters themselves
 //                         maps to → constant.numeric.sql  (orange, same as tmLanguage)
-//  14  sqlBracketContent → text inside [brackets] that are confirmed table names
-//                         maps to → entity.name.type.class.sql  (yellow, same as tmLanguage)
+//  14  sqlBracketContent → text inside [brackets] AND bare-word table names/aliases
+//                         maps to → entity.name.type.class.sql
+//  15  sqlTable         → left-hand side of table.column dot refs (alias.column)
+//                         maps to → variable.other.table.sql
 //  15  sqlTable         → bare-word table names and aliases (context-detected)
 //                         maps to → variable.other.table.sql
 //  16  sqlColumn        → right-hand side of alias.column  e.g. "RowID" in u.RowID
@@ -552,7 +554,8 @@ function emitSqlTokensForGroup(
         const tok = stitched.slice(off, off + len);
 
         if (tok.startsWith('[') && tok.endsWith(']')) {
-            // Bracketed table name: split into [ + inner + ]
+            // Bracketed table name: [ and ] get sqlBracketPunct (orange),
+            // inner text gets sqlBracketContent (entity.name.type.class.sql).
             emit(off,               1,           T_SQL_BRACKET_PUNC);
             const innerLen = len - 2;
             if (innerLen > 0) {
@@ -560,8 +563,8 @@ function emitSqlTokensForGroup(
             }
             emit(off + len - 1,     1,           T_SQL_BRACKET_PUNC);
         } else {
-            // Bare-word table name or alias
-            emit(off, len, T_SQL_TABLE);
+            // Bare-word table name or alias — same colour as bracketed inner content
+            emit(off, len, T_SQL_BRACKET_CON);
         }
         claim(off, len);
     }
@@ -577,9 +580,10 @@ function emitSqlTokensForGroup(
         const columnStart = tableStart + tableLen + 1;
         const columnLen   = m[2].length;
 
-        // If the left side wasn't claimed as a table name, colour it as sqlTable
+        // If the left side wasn't claimed as a table name, colour it as sqlBracketContent
+        // so alias references like u.Name have the same colour as the alias declaration "u"
         if (!isClaimed(tableStart, tableLen)) {
-            emit(tableStart, tableLen, T_SQL_TABLE);
+            emit(tableStart, tableLen, T_SQL_BRACKET_CON);
             claim(tableStart, tableLen);
         }
         // Right side is always a column
