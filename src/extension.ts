@@ -123,9 +123,10 @@ export function activate(context: vscode.ExtensionContext) {
     // ── Semantic tokens — smart highlighting of user-defined functions/subs ───
     // Only highlights names that are actually defined in this file or an include.
     // Uses VS Code's semantic token API so it works with all themes automatically.
+    const semanticTokensProviderInstance = new AspSemanticTokensProvider();
     const semanticProvider = vscode.languages.registerDocumentSemanticTokensProvider(
         'asp',
-        new AspSemanticTokensProvider(),
+        semanticTokensProviderInstance,
         ASP_SEMANTIC_LEGEND
     );
 
@@ -223,6 +224,7 @@ export function activate(context: vscode.ExtensionContext) {
         includePathProvider,
         definitionProvider,
         semanticProvider,
+        semanticTokensProviderInstance,
         aspHoverProvider,
         sqlDecorator,
         toggleCommand,

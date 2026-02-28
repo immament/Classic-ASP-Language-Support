@@ -78,13 +78,22 @@ const M_READONLY    = 2;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SQL detection — requires BOTH a DML/DDL verb AND a clause keyword.
-// Prevents false positives like "Select an option here!" from matching.
+// Extra guard: FROM followed by an English article (the/a/an/this/that/my/your etc.)
+// is plain English, not SQL — e.g. "Select an option from the list".
 // ─────────────────────────────────────────────────────────────────────────────
 const SQL_VERBS   = /\b(SELECT|INSERT|UPDATE|DELETE|EXEC|EXECUTE|CREATE|DROP|ALTER|TRUNCATE|MERGE)\b/i;
 const SQL_CLAUSES = /\b(FROM|INTO|TABLE|SET|VALUES|WHERE|JOIN|UNION|HAVING|GROUP\s+BY|ORDER\s+BY|RETURNING|DECLARE|BEGIN\s+TRAN|COMMIT|ROLLBACK)\b/i;
+const ENGLISH_ARTICLES = /^(the|a|an|this|that|these|those|my|your|our|their|its|her|his)$/i;
 
 function isSql(text: string): boolean {
-    return SQL_VERBS.test(text) && SQL_CLAUSES.test(text);
+    if (!SQL_VERBS.test(text) || !SQL_CLAUSES.test(text)) { return false; }
+    // If FROM is followed by an article, check if any other clause keyword exists
+    const fromMatch = text.match(/\bFROM\s+(\w+)/i);
+    if (fromMatch && ENGLISH_ARTICLES.test(fromMatch[1])) {
+        const withoutFrom = text.replace(/\bFROM\s+\w+/gi, '');
+        if (!SQL_CLAUSES.test(withoutFrom)) { return false; }
+    }
+    return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -416,26 +425,8 @@ function extractSqlGroup(
     startCol: number
 ): SqlStringGroup | null {
 
-    // ── Overview ──────────────────────────────────────────────────────────────
-    // VBScript SQL strings are often split across multiple string literals
-    // joined with & and variable concatenations, e.g.:
-    //
-    //   sql = "SELECT * FROM Users WHERE Name = '" & name & "' AND Id = " & id & _
-    //         " ORDER BY Name"
-    //
-    // We collect ALL string literal fragments (the parts inside double-quotes)
-    // and stitch them together so SQL detection and colouring works across the
-    // full query — skipping over the variable parts in between.
-    //
-    // Strategy:
-    //   1. Read the first string fragment starting at startCol.
-    //   2. After the closing quote, scan the rest of the line for more "..."
-    //      fragments, skipping over & variable & gaps.
-    //   3. If the line ends with & _ (with optional comment), move to the next
-    //      line and repeat from step 2.
-    //   4. Stop when we hit a line that doesn't end with & _ or when we can't
-    //      find any more string fragments.
-    // ─────────────────────────────────────────────────────────────────────────
+    // Stitches all "..." string fragments on a line (and across & _ continuation
+    // lines) into one string, skipping & variable & gaps between them.
 
     const lineCount = document.lineCount;
     const segments: SqlStringSegment[] = [];
@@ -553,23 +544,10 @@ function extractSqlGroup(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Emit all SQL semantic tokens for a confirmed SQL string group.
-//
-// Pass order (highest priority first — claimed[] prevents overlaps):
-//   1. Table names & aliases  — context-detected via findTableRanges()
-//      1a. [bracketed] table parts → sqlBracketPunct + sqlBracketContent
-//      1b. bare-word table parts   → sqlTable
-//   2. table.column dot refs  — alias.column where alias is NOT a table name
-//      (we skip the left side if it was already claimed as a table name)
-//      right side → sqlColumn
-//   3. @variable parameters   → sqlVariable
-//   4. Numeric literals        → sqlNumber
-//   5. SQL keywords/functions  → sqlDml / sqlDdl / sqlLogical / etc.
-//
-// For bracket-type table ranges, we split the token into three sub-tokens:
-//   [  → sqlBracketPunct
-//   inner content → sqlBracketContent
-//   ]  → sqlBracketPunct
+// Emit SQL semantic tokens for a confirmed SQL string group.
+// Five passes (claimed[] prevents overlaps):
+//   1. Table names/aliases  2. alias.column refs  3. @variables
+//   4. Numeric literals     5. SQL keywords/functions/types
 // ─────────────────────────────────────────────────────────────────────────────
 function emitSqlTokensForGroup(
     builder: vscode.SemanticTokensBuilder,
@@ -629,8 +607,8 @@ function emitSqlTokensForGroup(
     }
 
     // ── Pass 2: alias.column dot references ──────────────────────────────────
-    // Only emits the right-hand side (column) since left side may already be
-    // claimed as a table name (in which case we skip it entirely).
+    // Left side uses T_SQL_BRACKET_CON so u.Name references match the colour
+    // of the alias declaration in "FROM dbo.Users u".
     const dotPattern = /\b([a-zA-Z_][a-zA-Z0-9_]*)\.(\*|[a-zA-Z_][a-zA-Z0-9_]*)/g;
     let m: RegExpExecArray | null;
     while ((m = dotPattern.exec(stitched)) !== null) {
@@ -639,13 +617,10 @@ function emitSqlTokensForGroup(
         const columnStart = tableStart + tableLen + 1;
         const columnLen   = m[2].length;
 
-        // If the left side wasn't claimed as a table name, colour it as sqlBracketContent
-        // so alias references like u.Name have the same colour as the alias declaration "u"
         if (!isClaimed(tableStart, tableLen)) {
             emit(tableStart, tableLen, T_SQL_BRACKET_CON);
             claim(tableStart, tableLen);
         }
-        // Right side is always a column
         if (!isClaimed(columnStart, columnLen)) {
             emit(columnStart, columnLen, T_SQL_COLUMN);
             claim(columnStart, columnLen);
@@ -682,6 +657,17 @@ function emitSqlTokensForGroup(
 
 export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
 
+    private readonly _diagnostics: vscode.DiagnosticCollection;
+
+    constructor() {
+        // Orange squiggly when a SQL variable is also assigned a plain string.
+        this._diagnostics = vscode.languages.createDiagnosticCollection('asp-sql-vars');
+    }
+
+    dispose(): void {
+        this._diagnostics.dispose();
+    }
+
     provideDocumentSemanticTokens(
         document: vscode.TextDocument,
         token: vscode.CancellationToken
@@ -717,11 +703,205 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             }
         }
 
+        // ── Pass A: SQL variable discovery ───────────────────────────────────
+        // Find all variables assigned a confirmed SQL string anywhere in the file.
+        // Sub-pass 1: direct SQL assignments. Sub-pass 2: self-append propagation.
+
+        // isSqlOrFragment: like isSql() but also accepts EXEC/EXECUTE without a clause,
+        // since stored procedure calls are valid SQL but have no FROM/WHERE etc.
+        function isSqlOrFragment(text: string): boolean {
+            if (isSql(text)) { return true; }
+            return /^\s*EXEC(?:UTE)?\s+/i.test(text);
+        }
+
+        // Collect every variable assignment that contains at least one string literal.
+        // For multi-line & _ continuations, stitch all fragments so isSql() sees
+        // the full query (e.g. SELECT on line 1, FROM on line 2).
+        interface VarAssignment {
+            isSelfAppend:  boolean;
+            stitchedValue: string;
+        }
+        const assignmentMap = new Map<string, VarAssignment[]>();
+
+        const assignPattern = /^\s*([a-zA-Z_]\w*)\s*=\s*(.+)$/;
+        const processedAssignLines = new Set<number>();
+
+        for (let li = 0; li < lineCount; li++) {
+            if (processedAssignLines.has(li)) { continue; }
+
+            const lineText   = document.lineAt(li).text;
+            const lineOffset = document.offsetAt(new vscode.Position(li, 0));
+            const midOffset  = lineOffset + Math.floor(lineText.length / 2);
+            if (!isInsideAspBlock(text, midOffset)) { continue; }
+
+            let stripped = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+            const cpIdx = stripped.indexOf("'");
+            if (cpIdx !== -1) { stripped = stripped.substring(0, cpIdx); }
+
+            const am = assignPattern.exec(stripped);
+            if (!am) { continue; }
+
+            const varName = am[1].toLowerCase();
+            const rhs     = am[2].trim();
+
+            const selfAppendPattern = new RegExp(
+                '^\\b' + varName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&') + '\\b\\s*&', 'i'
+            );
+            const isSelfAppend = selfAppendPattern.test(rhs);
+
+            // Find the first " on this line and use extractSqlGroup to stitch
+            // all string fragments including & _ continuations on following lines.
+            const quoteCol = lineText.indexOf('"', lineText.indexOf(am[1]));
+            let stitchedValue = '';
+
+            if (quoteCol !== -1) {
+                const group = extractSqlGroup(document, li, quoteCol);
+                if (group !== null) {
+                    stitchedValue = group.stitched;
+                    // Mark continuation lines as processed so we don't double-count
+                    for (const seg of group.segments) { processedAssignLines.add(seg.lineIndex); }
+                } else {
+                    // Not a full SQL group — just collect literals from this line
+                    const strPat = /"((?:[^"]|"")*)"/g;
+                    let sm: RegExpExecArray | null;
+                    const lits: string[] = [];
+                    while ((sm = strPat.exec(lineText)) !== null) {
+                        lits.push(sm[1].replace(/""/g, '"'));
+                    }
+                    stitchedValue = lits.join(' ');
+                }
+            }
+
+            if (!stitchedValue) { continue; }
+
+            if (!assignmentMap.has(varName)) { assignmentMap.set(varName, []); }
+            assignmentMap.get(varName)!.push({ isSelfAppend, stitchedValue });
+        }
+
+        // Sub-pass 1: find variables directly assigned confirmed SQL
+        const sqlVars = new Set<string>();
+        for (const [varName, assignments] of assignmentMap) {
+            for (const a of assignments) {
+                if (!a.isSelfAppend && isSqlOrFragment(a.stitchedValue)) {
+                    sqlVars.add(varName);
+                    break;
+                }
+            }
+        }
+
+        // Sub-pass 2: if all non-self assignments are SQL and at least one
+        // self-append exists, it's also a SQL var. Repeat until stable.
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (const [varName, assignments] of assignmentMap) {
+                if (sqlVars.has(varName)) { continue; }
+                // Check if ALL non-self-append assignments are SQL,
+                // and at least one self-append references a known SQL var
+                const nonSelfAssigns = assignments.filter(a => !a.isSelfAppend);
+                const selfAssigns    = assignments.filter(a =>  a.isSelfAppend);
+                if (selfAssigns.length === 0) { continue; }
+                // All non-self assignments (if any) must be SQL
+                const allNonSelfAreSql = nonSelfAssigns.every(a => isSql(a.stitchedValue));
+                if (!allNonSelfAreSql && nonSelfAssigns.length > 0) { continue; }
+                // Mark as SQL var
+                sqlVars.add(varName);
+                changed = true;
+            }
+        }
+
+        // ── SQL variable reuse diagnostics ────────────────────────────────────
+        // Warn when a known SQL variable is assigned a plain non-SQL string.
+        const sqlDiagnostics: vscode.Diagnostic[] = [];
+
+        if (sqlVars.size > 0) {
+            const assignLinePattern = /^\s*([a-zA-Z_]\w*)\s*=\s*(.+)$/;
+
+            for (let li = 0; li < lineCount; li++) {
+                const lineText   = document.lineAt(li).text;
+                const lineOffset = document.offsetAt(new vscode.Position(li, 0));
+                const midOffset  = lineOffset + Math.floor(lineText.length / 2);
+                if (!isInsideAspBlock(text, midOffset)) { continue; }
+
+                // Blank strings + strip comment
+                let stripped3 = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+                const cp3 = stripped3.indexOf("'");
+                if (cp3 !== -1) { stripped3 = stripped3.substring(0, cp3); }
+
+                const am3 = assignLinePattern.exec(stripped3);
+                if (!am3) { continue; }
+
+                const varName3 = am3[1].toLowerCase();
+                if (!sqlVars.has(varName3)) { continue; }
+
+                const rhs3 = am3[2].trim();
+
+                // Is this a self-append? If so it's fine — skip.
+                const isSelfRef = new RegExp(
+                    '^\\b' + varName3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i'
+                ).test(rhs3);
+                if (isSelfRef) { continue; }
+
+                // Collect string literals from this assignment
+                const strLits3: string[] = [];
+                const sp3 = /"((?:[^"]|"")*)"/g;
+                let sm3: RegExpExecArray | null;
+                while ((sm3 = sp3.exec(lineText)) !== null) {
+                    strLits3.push(sm3[1].replace(/""/g, '"'));
+                }
+                if (strLits3.length === 0) { continue; }
+
+                const stitched3 = strLits3.join(' ');
+
+                // If this non-self assignment is NOT SQL — that is the suspicious one
+                if (!isSqlOrFragment(stitched3)) {
+                    // Find the column of the variable name on this line
+                    const varCol = lineText.search(new RegExp(
+                        '\\b' + varName3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i'
+                    ));
+                    if (varCol === -1) { continue; }
+
+                    const range = new vscode.Range(
+                        new vscode.Position(li, varCol),
+                        new vscode.Position(li, varCol + varName3.length)
+                    );
+                    const diag = new vscode.Diagnostic(
+                        range,
+                        `'${am3[1]}' is also used as a SQL query variable elsewhere in this file. ` +
+                        `This assignment may suppress SQL highlighting on appended strings.`,
+                        vscode.DiagnosticSeverity.Warning
+                    );
+                    diag.source = 'ASP SQL';
+                    sqlDiagnostics.push(diag);
+                }
+            }
+        }
+
+        this._diagnostics.set(document.uri, sqlDiagnostics);
+
         // ── SQL string pre-pass ───────────────────────────────────────────────
-        // Finds all confirmed SQL strings, emits their tokens, and records which
-        // line/col ranges are SQL content so the VBScript pass skips them.
+        // Colour confirmed SQL strings and fragments appended to SQL variables.
         const sqlStringLines    = new Map<number, Array<[number, number]>>();
         const processedSqlLines = new Set<number>();
+
+        // Colour a single string literal as SQL (for known SQL variable appends).
+        function emitFragmentAsSql(
+            li: number, lineText: string, colStart: number, colEnd: number
+        ): void {
+            const content = lineText.substring(colStart, colEnd);
+            const offsetMap = [];
+            for (let c = colStart; c < colEnd; c++) {
+                offsetMap.push({ lineIndex: li, col: c });
+            }
+            const group: SqlStringGroup = {
+                segments:  [{ lineIndex: li, lineText, colStart, colEnd }],
+                stitched:  content,
+                offsetMap,
+            };
+            emitSqlTokensForGroup(builder, group);
+            if (!sqlStringLines.has(li)) { sqlStringLines.set(li, []); }
+            sqlStringLines.get(li)!.push([colStart, colEnd]);
+        }
 
         for (let li = 0; li < lineCount; li++) {
             if (processedSqlLines.has(li)) { continue; }
@@ -731,10 +911,31 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             const midOffset  = lineOffset + Math.floor(lineText.length / 2);
             if (!isInsideAspBlock(text, midOffset)) { continue; }
 
+            // Check if this line is an append to a known SQL variable:
+            //   sqlVar = sqlVar & "..." or sqlVar & "..." (standalone concat)
+            // If so, colour all string literals on this line as SQL.
+            let lineIsSqlAppend = false;
+            if (sqlVars.size > 0) {
+                // Strip strings + comment to check variable names safely
+                let stripped2 = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+                const cp2 = stripped2.indexOf("'");
+                if (cp2 !== -1) { stripped2 = stripped2.substring(0, cp2); }
+                // Match: sqlVar = ... & or sqlVar & (append patterns)
+                for (const sqlVar of sqlVars) {
+                    const escaped = sqlVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    // Pattern: starts with optional whitespace + sqlVar then = or &
+                    if (new RegExp('^\\s*' + escaped + '\\s*(?:=|&)', 'i').test(stripped2)) {
+                        lineIsSqlAppend = true;
+                        break;
+                    }
+                }
+            }
+
             let col = 0;
             while (col < lineText.length) {
                 if (lineText[col] !== '"') { col++; continue; }
 
+                // Try full SQL group detection first (handles multi-line stitching)
                 const group = extractSqlGroup(document, li, col);
 
                 if (group !== null) {
@@ -747,6 +948,22 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                         sqlStringLines.get(seg.lineIndex)!.push([seg.colStart, seg.colEnd]);
                     }
                     col = group.segments[0].colEnd + 1;
+                } else if (lineIsSqlAppend) {
+                    // Not a self-contained SQL string, but it's being appended to
+                    // a known SQL variable — colour it as a SQL fragment.
+                    col++; // step past opening "
+                    const fragStart = col;
+                    while (col < lineText.length) {
+                        if (lineText[col] === '"') {
+                            if (col + 1 < lineText.length && lineText[col + 1] === '"') {
+                                col += 2;
+                            } else { break; }
+                        } else { col++; }
+                    }
+                    if (col < lineText.length) {
+                        emitFragmentAsSql(li, lineText, fragStart, col);
+                        col++; // past closing "
+                    }
                 } else {
                     // Not SQL — skip past this string
                     col++;
