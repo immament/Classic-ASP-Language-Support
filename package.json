@@ -72,10 +72,75 @@
             {
                 "language": "asp",
                 "scopes": {
-                    "function":             ["entity.name.function.asp"],
-                    "function.declaration": ["entity.name.function.asp"],
-                    "namespace":            ["entity.name.function.asp"],
-                    "namespace.declaration":["entity.name.function.asp"]
+                    "function": [
+                        "entity.name.function.asp"
+                    ],
+                    "function.declaration": [
+                        "entity.name.function.asp"
+                    ],
+                    "namespace": [
+                        "entity.name.function.asp"
+                    ],
+                    "namespace.declaration": [
+                        "entity.name.function.asp"
+                    ],
+                    "variable": [
+                        "variable.other.asp"
+                    ],
+                    "variable.declaration": [
+                        "variable.other.asp"
+                    ],
+                    "parameter": [
+                        "variable.parameter.function.asp"
+                    ],
+                    "parameter.declaration": [
+                        "variable.parameter.function.asp"
+                    ],
+                    "enumMember": [
+                        "variable.other.constant.asp"
+                    ],
+                    "enumMember.declaration.readonly": [
+                        "variable.other.constant.asp"
+                    ],
+                    "enumMember.readonly": [
+                        "variable.other.constant.asp"
+                    ],
+                    "sqlDml": [
+                        "keyword.other.DML.sql"
+                    ],
+                    "sqlDdl": [
+                        "keyword.other.DDL.sql"
+                    ],
+                    "sqlLogical": [
+                        "keyword.operator.logical.sql"
+                    ],
+                    "sqlKeyword": [
+                        "keyword.other.sql"
+                    ],
+                    "sqlFunction": [
+                        "support.function.aggregate.sql"
+                    ],
+                    "sqlType": [
+                        "storage.type.sql"
+                    ],
+                    "sqlVariable": [
+                        "variable.parameter.sql"
+                    ],
+                    "sqlNumber": [
+                        "constant.numeric.sql"
+                    ],
+                    "sqlBracketPunct": [
+                        "constant.numeric.sql"
+                    ],
+                    "sqlBracketContent": [
+                        "entity.name.type.class.sql"
+                    ],
+                    "sqlTable": [
+                        "variable.other.table.sql"
+                    ],
+                    "sqlColumn": [
+                        "variable.other.column.sql"
+                    ]
                 }
             }
         ],
@@ -249,11 +314,6 @@
             {
                 "title": "Syntax Highlighting",
                 "properties": {
-                    "aspLanguageSupport.enableSQLHighlighting": {
-                        "type": "boolean",
-                        "default": true,
-                        "markdownDescription": "Enable SQL syntax highlighting inside double-quoted strings. Toggle with `ASP: Toggle SQL Syntax Highlighting` command (requires reload)."
-                    },
                     "aspLanguageSupport.highlightAspRegions": {
                         "type": "boolean",
                         "default": true,
@@ -290,12 +350,6 @@
                         "description": "Enable ASP object and VBScript keyword auto-completion"
                     }
                 }
-            }
-        ],
-        "commands": [
-            {
-                "command": "asp.toggleSQLHighlighting",
-                "title": "ASP: Toggle SQL Syntax Highlighting in Strings"
             }
         ]
     },

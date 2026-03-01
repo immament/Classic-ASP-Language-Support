@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { formatCompleteAspFile } from './formatter/htmlFormatter';
 import { HtmlCompletionProvider, registerAutoClosingTag, registerEnterKeyHandler, registerTabKeyHandler } from './providers/htmlCompletionProvider';
 import { AspCompletionProvider } from './providers/aspCompletionProvider';
@@ -13,45 +11,8 @@ import { AspSemanticTokensProvider, ASP_SEMANTIC_LEGEND } from './providers/aspS
 import { AspHoverProvider } from './providers/aspHoverProvider';
 import { addRegionHighlights } from './highlight';
 
-/**
- * Copies the appropriate grammar file based on SQL highlighting setting
- */
-function updateGrammarFile(extensionPath: string, enableSQL: boolean): void {
-    const syntaxesDir = path.join(extensionPath, 'syntaxes');
-    const targetFile  = path.join(syntaxesDir, 'asp.tmLanguage.json');
-
-    // Choose source file based on setting
-    const sourceFile = enableSQL
-        ? path.join(syntaxesDir, 'asp-sql.tmLanguage.json')
-        : path.join(syntaxesDir, 'asp-nosql.tmLanguage.json');
-
-    try {
-        if (!fs.existsSync(sourceFile)) {
-            console.error(`Source grammar file not found: ${sourceFile}`);
-            return;
-        }
-        fs.copyFileSync(sourceFile, targetFile);
-        console.log(`Grammar file updated: ${enableSQL ? 'SQL highlighting enabled' : 'SQL highlighting disabled'}`);
-    } catch (error) {
-        console.error('Error updating grammar file:', error);
-    }
-}
-
 export function activate(context: vscode.ExtensionContext) {
     console.log('Classic ASP Language Support is now active!');
-
-    const extensionPath = context.extensionPath;
-
-    // Get initial SQL highlighting setting
-    const config    = vscode.workspace.getConfiguration('aspLanguageSupport');
-    const enableSQL = config.get<boolean>('enableSQLHighlighting', true);
-
-    // Update grammar file on activation
-    try {
-        updateGrammarFile(extensionPath, enableSQL);
-    } catch (error) {
-        console.error('ASP: Failed to update grammar file on activation:', error);
-    }
 
     // Add ASP region highlighting
     addRegionHighlights(context);
@@ -122,9 +83,10 @@ export function activate(context: vscode.ExtensionContext) {
     // ── Semantic tokens — smart highlighting of user-defined functions/subs ───
     // Only highlights names that are actually defined in this file or an include.
     // Uses VS Code's semantic token API so it works with all themes automatically.
+    const semanticTokensProviderInstance = new AspSemanticTokensProvider();
     const semanticProvider = vscode.languages.registerDocumentSemanticTokensProvider(
         'asp',
-        new AspSemanticTokensProvider(),
+        semanticTokensProviderInstance,
         ASP_SEMANTIC_LEGEND
     );
 
@@ -141,41 +103,6 @@ export function activate(context: vscode.ExtensionContext) {
     registerEnterKeyHandler(context);
     registerTabKeyHandler(context);
 
-    // ── Toggle SQL highlighting command ───────────────────────────────────────
-    const toggleCommand = vscode.commands.registerCommand('asp.toggleSQLHighlighting', async () => {
-        const config       = vscode.workspace.getConfiguration('aspLanguageSupport');
-        const currentValue = config.get<boolean>('enableSQLHighlighting', true);
-
-        await config.update('enableSQLHighlighting', !currentValue, vscode.ConfigurationTarget.Global);
-        updateGrammarFile(extensionPath, !currentValue);
-
-        const action = await vscode.window.showInformationMessage(
-            `SQL highlighting ${!currentValue ? 'enabled' : 'disabled'}. Please reload the window for changes to take effect.`,
-            'Reload Window', 'Later'
-        );
-        if (action === 'Reload Window') {
-            vscode.commands.executeCommand('workbench.action.reloadWindow');
-        }
-    });
-
-    // ── Watch for SQL highlighting setting changes ────────────────────────────
-    const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('aspLanguageSupport.enableSQLHighlighting')) {
-            const config    = vscode.workspace.getConfiguration('aspLanguageSupport');
-            const enableSQL = config.get<boolean>('enableSQLHighlighting', true);
-            updateGrammarFile(extensionPath, enableSQL);
-
-            vscode.window.showInformationMessage(
-                `SQL highlighting setting changed to ${enableSQL ? 'enabled' : 'disabled'}. Please reload the window for changes to take effect.`,
-                'Reload Window', 'Later'
-            ).then(selection => {
-                if (selection === 'Reload Window') {
-                    vscode.commands.executeCommand('workbench.action.reloadWindow');
-                }
-            });
-        }
-    });
-
     // ── Auto-trigger CSS suggestions inside empty style="" ────────────────────
     // Fires when a completion places the cursor between empty style quotes.
     const inlineStyleTrigger = vscode.window.onDidChangeTextEditorSelection(e => {
@@ -187,8 +114,8 @@ export function activate(context: vscode.ExtensionContext) {
         const selection = e.selections[0];
         if (!selection.isEmpty) return;
 
-        const offset     = doc.offsetAt(selection.active);
-        const content    = doc.getText();
+        const offset      = doc.offsetAt(selection.active);
+        const content     = doc.getText();
         const searchStart = Math.max(0, offset - 200);
         const searchArea  = content.slice(searchStart, offset);
         const match       = searchArea.match(/style\s*=\s*(["'])([\s\S]*)$/i);
@@ -216,9 +143,8 @@ export function activate(context: vscode.ExtensionContext) {
         includePathProvider,
         definitionProvider,
         semanticProvider,
+        semanticTokensProviderInstance,
         aspHoverProvider,
-        toggleCommand,
-        configWatcher,
         inlineStyleTrigger
     );
 }
