@@ -101,6 +101,7 @@ sql = "SELECT a.Name, b.Value, c.Code FROM [SampleDb].[dbo].Orders a JOIN dbo.[P
 ' ── SECTION 3  Variable concatenation ────────────────────────────────────────
 
 stmt = "SELECT ProductCode, ProductName FROM [SampleDb].[dbo].[Products] WITH (NOLOCK) WHERE Category = '" & category & "' AND ("
+test = "MERGE [test] AS target USING testing AS source ON target.Name"
 
 Dim prefixArray
 prefixArray = Split(productPrefix, ",")
@@ -130,7 +131,151 @@ strQuery = "SELECT o.OrderId, o.Total, u.Name " & _
 stmt = "Something went wrong, please try again."   ' <-- should show warning squiggly
 
 
-' ── SECTION 6  Edge cases ────────────────────────────────────────────────────
+' ── SECTION 6  Function return analysis ──────────────────────────────────────
+'
+' Three categories are tested here:
+'   (a) Functions confirmed to return SQL — strings inside their body get
+'       coloured, and calling them in a SQL concat produces no warning.
+'   (b) Function returning a plain non-SQL string — calling it in a SQL
+'       concat should produce a warning on the call site.
+'   (c) Function returning a non-string (number) — calling it in a SQL
+'       concat should produce a stronger warning on the call site.
+
+' ── (a) BuildCategoryCTE — confirmed SQL return, multi-line _ continuation ───
+' Strings inside MUST be fully coloured.
+' Using it in sql3b must NOT produce a warning.
+
+Dim sql3b
+sql3b = BuildCategoryCTE(gpCode, gpDate) & _
+    "SELECT a.*, b.StockQty " & _
+    "FROM [SampleDb].[dbo].[CategoryTree] a " & _
+    "LEFT JOIN [SampleDb].[dbo].[StockLevels] b " & _
+    "    ON b.CategoryId = " & gpId & " AND b.VariantCode = a.ChildCode " & _
+    "ORDER BY a.SortOrder"
+
+Function BuildCategoryCTE(code, refDate)
+    BuildCategoryCTE = _
+        "WITH CategoryTree (ParentId, ChildId, ChildCode, EffDate, CloseDate, SortOrder, Level) AS ( " & _
+        "    SELECT a.ParentId, a.ChildId, a.ChildCode, a.EffDate, a.CloseDate, " & _
+        "           CAST(LTRIM(RTRIM(a.ChildCode)) AS VARCHAR(255)) AS SortOrder, 0 AS Level " & _
+        "    FROM [SampleDb].[dbo].[CategoryLinks] a " & _
+        "    WHERE a.ParentCode = '" & Replace(code, "'", "''") & "' " & _
+        "      AND a.EffDate <= '" & refDate & "' AND a.CloseDate >= '" & refDate & "' " & _
+        "    UNION ALL " & _
+        "    SELECT a.ParentId, a.ChildId, a.ChildCode, a.EffDate, a.CloseDate, " & _
+        "           CAST(CONCAT(b.SortOrder, '|', LTRIM(RTRIM(a.ChildCode))) AS VARCHAR(255)), " & _
+        "           b.Level + 1 " & _
+        "    FROM [SampleDb].[dbo].[CategoryLinks] a " & _
+        "    INNER JOIN CategoryTree b ON b.ChildId = a.ParentId " & _
+        "    WHERE a.EffDate <= '" & refDate & "' AND a.CloseDate >= '" & refDate & "' " & _
+        ") "
+End Function
+
+' ── (a) GetStatusFilter — confirmed SQL fragment return, single line ──────────
+' Returns a WHERE clause fragment. Strings inside MUST be coloured.
+' Using it in filteredSql must NOT produce a warning.
+
+Dim filteredSql
+filteredSql = "SELECT a.RecordId, a.Label FROM [SampleDb].[dbo].[Records] a " & _
+              GetStatusFilter(gpStatus) & _
+              " ORDER BY a.Label"
+
+Function GetStatusFilter(statusVal)
+    GetStatusFilter = "WHERE a.IsActive = 1 AND a.StatusCode = '" & Replace(statusVal, "'", "''") & "' "
+End Function
+
+' ── (b) BuildLabel — returns a plain non-SQL string ──────────────────────────
+' Strings inside NOT coloured as SQL. Warning expected on the call site.
+
+Dim warnSql
+warnSql = "SELECT * FROM [SampleDb].[dbo].[Records] WHERE " & BuildLabel(gpParam)
+
+Function BuildLabel(param)
+    BuildLabel = "Display: " & param
+End Function
+
+' ── (c) GetPageSize — returns a number, not a string ─────────────────────────
+' Stronger warning expected on the call site (non-string return).
+
+Function GetPageSize(n)
+    GetPageSize = n * 10
+End Function
+
+Dim pagedSql
+pagedSql = "SELECT TOP " & GetPageSize(5) & " * FROM [SampleDb].[dbo].[Records] WHERE IsActive = 1"
+
+
+' ── SECTION 7  WHERE fragment propagation ────────────────────────────────────
+'
+' whereFilters starts with a real SQL fragment (WHERE EXISTS ...) so it is
+' added to sqlVars and all subsequent & appends are coloured with no warnings.
+
+Dim whereFilters
+whereFilters = "WHERE EXISTS (SELECT 1 FROM [SampleDb].[dbo].[CategoryLinks] c " & _
+               "WHERE c.ParentId = a.ParentId " & _
+               "AND c.ChildCode = a.RootCode " & _
+               "AND c.Region = '" & Replace(gpRegion, "'", "''") & "') "
+
+If gpRegion <> "" Then
+    whereFilters = whereFilters & "AND a.Region = '" & Replace(gpRegion, "'", "''") & "' "
+End If
+
+If Not gpIncludeArchived Then
+    whereFilters = whereFilters & "AND a.IsArchived = 0 "
+End If
+
+Dim mainSql
+mainSql = BuildCategoryCTE(gpCode, gpDate) & _
+    "SELECT a.*, b.StockQty " & _
+    "FROM [SampleDb].[dbo].[CategoryTree] a " & _
+    "LEFT JOIN [SampleDb].[dbo].[StockLevels] b " & _
+    "    ON b.CategoryId = " & gpId & " AND b.VariantCode = a.ChildCode " & _
+    whereFilters & " " & _
+    "ORDER BY a.SortOrder"
+
+
+' ── SECTION 8  MERGE statements ──────────────────────────────────────────────
+
+Dim mergeSql
+
+' Basic MERGE — [db].[schema].[table] target + (SELECT ...) AS src alias
+mergeSql = "MERGE [SampleDb].[dbo].[StockLevels] AS tgt " & _
+           "USING (SELECT 1 AS VariantId) AS src " & _
+           "ON tgt.VariantId = src.VariantId " & _
+           "WHEN MATCHED THEN UPDATE SET tgt.StockQty = src.StockQty " & _
+           "WHEN NOT MATCHED THEN INSERT (VariantId, StockQty) VALUES (src.VariantId, src.StockQty);"
+
+' MERGE multi-column UPDATE + INSERT + VBScript value interpolation
+mergeSql = _
+    "MERGE [SampleDb].[dbo].[StockLevels] AS tgt " & _
+    "USING (SELECT " & _
+        svVariantId & " AS VariantId, " & _
+        "'" & svWarehouse & "' AS Warehouse, " & _
+        "'" & svBatchRef & "' AS BatchRef " & _
+    ") AS src " & _
+    "ON tgt.VariantId = src.VariantId " & _
+        "AND tgt.Warehouse = src.Warehouse " & _
+        "AND tgt.BatchRef = src.BatchRef " & _
+    "WHEN MATCHED THEN UPDATE SET " & _
+        "tgt.Description = '" & svDesc & "', " & _
+        "tgt.StockQty = " & svQty & " " & _
+    "WHEN NOT MATCHED THEN INSERT " & _
+    "(VariantId, Warehouse, BatchRef, Description, StockQty) VALUES (" & _
+        svVariantId & ", " & _
+        "'" & svWarehouse & "', " & _
+        "'" & svBatchRef & "', " & _
+        "'" & svDesc & "', " & _
+        svQty & _
+    ");"
+
+' MERGE bare-word tables (no brackets)
+mergeSql = "MERGE dbo.StockLevels AS target " & _
+           "USING dbo.IncomingStock AS source ON target.VariantId = source.VariantId " & _
+           "WHEN MATCHED THEN UPDATE SET target.StockQty = target.StockQty + source.StockQty " & _
+           "WHEN NOT MATCHED THEN INSERT (VariantId, StockQty) VALUES (source.VariantId, source.StockQty);"
+
+
+' ── SECTION 9  Edge cases ────────────────────────────────────────────────────
 
 ' Empty string and number string — not SQL
 Dim empty, numStr
