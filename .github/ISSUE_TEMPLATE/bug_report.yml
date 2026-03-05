@@ -1,4 +1,4 @@
-name: Bug Report
+name: 🐛 Bug Report
 description: Report a bug or unexpected behaviour in the Classic ASP extension
 labels: ["bug"]
 
@@ -7,14 +7,14 @@ body:
     attributes:
       value: |
         Thanks for taking the time to report a bug! Please fill in as much detail as you can.
-        Fields marked as optional can be left blank, but the more detail you provide, the easier it is to reproduce and fix.
+        Only **Description** is required — everything else is optional but helps a lot.
 
   - type: input
     id: extension-version
     attributes:
       label: Extension Version
       description: Found in the Extensions panel in VS Code.
-      placeholder: e.g. 1.2.0
+      placeholder: e.g. v0.3.1
     validations:
       required: false
 
@@ -31,7 +31,7 @@ body:
     id: current-behaviour
     attributes:
       label: Current Behaviour
-      description: What is actually happening? Include a code snippet if relevant.
+      description: What is actually happening? Include a code snippet if relevant. (Optional)
       placeholder: |
         e.g. `End If` is indented to the inner `If` statement even though it is outside the `While` loop.
 
@@ -44,13 +44,13 @@ body:
                 End If
         ```
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: expected-behaviour
     attributes:
       label: Expected Behaviour
-      description: What should happen instead? Include a code snippet if relevant.
+      description: What should happen instead? Include a code snippet if relevant. (Optional)
       placeholder: |
         ```vbscript
         If condition Then
@@ -61,7 +61,7 @@ body:
         End If
         ```
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: steps
