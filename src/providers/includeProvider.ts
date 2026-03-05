@@ -212,58 +212,85 @@ export class IncludePathCompletionProvider implements vscode.CompletionItemProvi
     provideCompletionItems(
         document: vscode.TextDocument,
         position: vscode.Position
-    ): vscode.ProviderResult<vscode.CompletionItem[]> {
+    ): vscode.ProviderResult<vscode.CompletionItem[] | vscode.CompletionList> {
 
         const lineText   = document.lineAt(position.line).text;
         const textBefore = lineText.substring(0, position.character);
 
         const includeMatch = textBefore.match(/<!--\s*#include\s+(file|virtual)\s*=\s*["']([^"']*)$/i);
-        if (!includeMatch) return [];
+        if (!includeMatch) { return new vscode.CompletionList([], false); }
 
         const includeType   = includeMatch[1].toLowerCase();
-        const typedSoFar    = includeMatch[2];
+        const typedSoFar    = includeMatch[2];          // e.g. '../../sub/part'
         const docDir        = path.dirname(document.uri.fsPath);
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? docDir;
 
-        const baseDir   = includeType === 'virtual' ? workspaceRoot : docDir;
-        const typedDir  = path.dirname(typedSoFar);
-        const searchDir = path.resolve(baseDir, typedDir === '.' ? '' : typedDir);
+        const baseDir = includeType === 'virtual' ? workspaceRoot : docDir;
+
+        // Split what the user typed into the directory prefix and the current segment.
+        // Normalise to forward-slashes first so path splitting works on Windows too.
+        const normalised   = typedSoFar.replace(/\\/g, '/');
+        const lastSlash    = normalised.lastIndexOf('/');
+        const typedDirPart = lastSlash >= 0 ? normalised.slice(0, lastSlash + 1) : ''; // e.g. '../../sub/'
+        const typedSegment = lastSlash >= 0 ? normalised.slice(lastSlash + 1)    : normalised; // e.g. 'part'
+
+        // path.resolve on Windows can mishandle forward-slash relative paths.
+        // Convert the relative part to the OS separator before resolving.
+        const relativeDir = typedDirPart.replace(/\//g, path.sep);
+        const searchDir   = path.resolve(baseDir, relativeDir);
+
+        // The range each item will REPLACE is only the current segment (after the
+        // last slash), so the already-typed directory prefix is never duplicated.
+        const replaceStart = new vscode.Position(position.line, position.character - typedSegment.length);
+        const replaceRange = new vscode.Range(replaceStart, position);
 
         let entries: fs.Dirent[];
         try {
             entries = fs.readdirSync(searchDir, { withFileTypes: true });
         } catch {
-            return [];
+            // Directory doesn't exist or can't be read — return incomplete so
+            // VS Code re-invokes us on the next keystroke rather than caching []
+            return new vscode.CompletionList([], true);
         }
+
+        // Skip hidden dot-files / dot-folders
+        const visible = entries.filter(e => !e.name.startsWith('.'));
 
         const items: vscode.CompletionItem[] = [];
 
-        for (const entry of entries) {
+        for (const entry of visible) {
             const isDir     = entry.isDirectory();
-            const isAspFile = entry.isFile() && /\.(asp|inc)$/i.test(entry.name);
-            if (!isDir && !isAspFile) continue;
-
-            const completionPath = typedDir === '.'
-                ? entry.name
-                : typedDir + '/' + entry.name;
+            // Show all files — the user decides what to include; we should not
+            // silently hide files just because of their extension.
+            const isFile = entry.isFile();
+            if (!isDir && !isFile) { continue; }
 
             const item = new vscode.CompletionItem(
                 entry.name,
                 isDir ? vscode.CompletionItemKind.Folder : vscode.CompletionItemKind.File
             );
 
-            item.insertText = completionPath.replace(/\\/g, '/');
+            // insertText is ONLY the segment name — never the full path prefix.
+            // replaceRange tells VS Code exactly which text to swap out, preventing
+            // the typed directory traversal from being duplicated on accept.
+            item.insertText = isDir ? entry.name + '/' : entry.name;
+            item.filterText = entry.name;   // keeps the list alive as user types letters
+            item.range      = replaceRange;
             item.detail     = isDir ? 'Directory' : 'Include file';
+            item.sortText   = (isDir ? '0_' : '1_') + entry.name.toLowerCase();
 
             if (isDir) {
-                item.insertText = item.insertText + '/';
-                item.command    = { command: 'editor.action.triggerSuggest', title: 'Suggest' };
+                // Re-trigger after the slash so the next directory level appears immediately
+                item.command = { command: 'editor.action.triggerSuggest', title: 'Suggest' };
             }
 
             items.push(item);
         }
 
-        return items;
+        // isIncomplete: true forces VS Code to re-invoke the provider on every
+        // keystroke instead of caching and filtering the stale list itself.
+        // This ensures suggestions always reflect the current typed path segment.
+        return new vscode.CompletionList(items, true);
     }
 }
 
