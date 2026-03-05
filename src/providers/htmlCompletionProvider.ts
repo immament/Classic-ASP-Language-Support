@@ -59,10 +59,11 @@ function isInAspBlock(document: vscode.TextDocument, position: vscode.Position):
     const before = document.getText(
         new vscode.Range(new vscode.Position(0, 0), position)
     );
-    const offset = document.offsetAt(position);
-    const docLen = document.getText().length;
-    const afterEnd = document.positionAt(Math.min(offset + 5000, docLen));
-    const after = document.getText(new vscode.Range(position, afterEnd));
+    // Search the entire remainder of the document so that long ASP blocks
+    // (where %>  is more than a fixed char-window away) are detected correctly.
+    const after = document.getText(
+        new vscode.Range(position, document.lineAt(document.lineCount - 1).range.end)
+    );
 
     const lastOpen  = before.lastIndexOf('<%');
     const lastClose = before.lastIndexOf('%>');
