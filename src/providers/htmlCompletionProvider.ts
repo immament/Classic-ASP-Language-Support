@@ -582,7 +582,7 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
             const targetIndent     = aspOpenerIndent !== null ? aspOpenerIndent : indent;
             // After %>, we're back in HTML — find what indent the next HTML child should use
             const htmlChildIndent  = findEnclosingHtmlChildIndent(document, position.line, indentUnit)
-                                     ?? targetIndent;
+                                    ?? targetIndent;
             if (targetIndent !== indent) {
                 const lineEnd = new vscode.Position(position.line, indent.length + currentLineText.length);
                 editor.edit(eb => {
