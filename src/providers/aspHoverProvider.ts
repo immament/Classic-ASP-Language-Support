@@ -110,17 +110,57 @@ const KEYWORD_DOCS: Record<string, string> = {
     'select case':'**Select Case** — Multi-branch conditional.\n\nExample: `Select Case x ... Case 1 ... End Select`',
     'with':       '**With** — Shorthand for repeated access to an object\'s members.\n\nExample: `With rs ... .MoveNext ... End With`',
     'on error resume next': '**On Error Resume Next** — Suppresses runtime errors and continues execution. Always check `Err.Number` after suspicious calls.',
-    'option explicit': '**Option Explicit** — Forces all variables to be declared with `Dim`. Recommended to prevent typo bugs.',
+    'option explicit':      '**Option Explicit** — Forces all variables to be declared with `Dim`. Recommended to prevent typo bugs.',
+    'end function':         '**End Function** — Closes a `Function` block.',
+    'end sub':              '**End Sub** — Closes a `Sub` block.',
+    'end if':               '**End If** — Closes an `If` block.',
+    'end while':            '**End While** — Closes a `While` block.',
+    'end with':             '**End With** — Closes a `With` block.',
+    'end select':           '**End Select** — Closes a `Select Case` block.',
+    'end class':            '**End Class** — Closes a `Class` block.',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Context detection
+// Scans upward from the cursor to determine whether it sits inside a VBScript
+// block (<% %>), a JavaScript block (<script>), or plain HTML.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type AspContext = 'vbscript' | 'script' | 'html';
+
+function getAspContext(document: vscode.TextDocument, position: vscode.Position): AspContext {
+    const fullText   = document.getText();
+    const offset     = document.offsetAt(position);
+    const textBefore = fullText.slice(0, offset);
+
+    // Check if we're inside a <script> block (language="javascript" or no language attr).
+    // Find the last <script and last </script> before the cursor.
+    const lastScriptOpen  = textBefore.lastIndexOf('<script');
+    const lastScriptClose = textBefore.lastIndexOf('</script');
+    if (lastScriptOpen !== -1 && lastScriptOpen > lastScriptClose) {
+        // Make sure it's not a VBScript <script language="vbscript"> block
+        const scriptTag = fullText.slice(lastScriptOpen, fullText.indexOf('>', lastScriptOpen) + 1);
+        if (!/language\s*=\s*["']vbscript["']/i.test(scriptTag)) {
+            return 'script';
+        }
+    }
+
+    // Check if we're inside a <% %> VBScript block.
+    // Find the last <% and last %> before the cursor.
+    const lastOpen  = textBefore.lastIndexOf('<%');
+    const lastClose = textBefore.lastIndexOf('%>');
+    if (lastOpen !== -1 && lastOpen > lastClose) {
+        return 'vbscript';
+    }
+
+    return 'html';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Hover provider
-// Shows docs when hovering over:
-//   • User-defined Function/Sub names (from this file or includes)
-//   • User-defined variables and constants
-//   • COM object variables (rs, conn, dict, etc.)
-//   • COM member names after a dot (rs.EOF, conn.Execute, etc.)
-//   • VBScript keywords
+// • VBScript context (<% %>): all hovers — keywords, symbols, COM members.
+// • Script context (<script>):  symbol/COM hovers only, no keyword docs.
+// • HTML context:               no hovers (except HTML link guard already applied).
 // ─────────────────────────────────────────────────────────────────────────────
 export class AspHoverProvider implements vscode.HoverProvider {
 
@@ -131,11 +171,13 @@ export class AspHoverProvider implements vscode.HoverProvider {
 
         const lineText = document.lineAt(position.line).text;
 
-        // Guard: if the cursor is inside an HTML file-link attribute value (href,
-        // src, action, data-src), suppress symbol hover entirely. The link tooltip
-        // from HtmlAttributeLinkProvider is sufficient — we don't want "function test
-        // defined in this file" appearing when hovering over href="test.css".
+        // Suppress hover inside HTML file-link attributes (href, src, etc.)
         if (isCursorInHtmlFileLinkAttribute(lineText, position.character)) return null;
+
+        const context = getAspContext(document, position);
+
+        // No hovers inside plain HTML
+        if (context === 'html') return null;
 
         const wordRange = document.getWordRangeAtPosition(position, /\w+/);
         if (!wordRange) return null;
@@ -144,21 +186,16 @@ export class AspHoverProvider implements vscode.HoverProvider {
         const wordKey = word.toLowerCase();
 
         // ── 1. COM member after dot — e.g. rs.EOF, conn.Execute ──────────────
-        // Check if there's a dot immediately before the word
         const charBeforeWord = lineText.charAt(wordRange.start.character - 1);
         if (charBeforeWord === '.') {
-            // Find the object name before the dot
             const textBeforeDot = lineText.substring(0, wordRange.start.character - 1);
             const objMatch      = textBeforeDot.match(/\b(\w+)$/);
             if (objMatch) {
-                const objName  = objMatch[1].toLowerCase();
+                const objName    = objMatch[1].toLowerCase();
                 const allSymbols = collectAllSymbols(document);
-
-                // Find which COM type this object is
-                const comVar = allSymbols.comVariables.find(cv => cv.name.toLowerCase() === objName);
+                const comVar     = allSymbols.comVariables.find(cv => cv.name.toLowerCase() === objName);
                 if (comVar) {
-                    const key     = `${comVar.progId}.${wordKey}`;
-                    const memberDoc = COM_MEMBER_DOCS[key];
+                    const memberDoc = COM_MEMBER_DOCS[`${comVar.progId}.${wordKey}`];
                     if (memberDoc) {
                         return new vscode.Hover(
                             new vscode.MarkdownString(`**${memberDoc.label}**\n\n${memberDoc.doc}`)
@@ -218,7 +255,51 @@ export class AspHoverProvider implements vscode.HoverProvider {
             );
         }
 
-        // ── 6. VBScript keywords ──────────────────────────────────────────────
+        // ── 6. VBScript keywords — only inside <% %> blocks ──────────────────
+        // Keyword docs are VBScript-specific so we suppress them inside <script>.
+        if (context !== 'vbscript') return null;
+
+        // Check for compound keywords (End Function, End If, etc.).
+        // We handle two cases:
+        //   a) Cursor is on the SECOND word (e.g. "Function" in "End Function")
+        //      — peek at the word before to build the compound key.
+        //   b) Cursor is on the FIRST word (e.g. "End" in "End Function")
+        //      — peek at the word after to build the compound key.
+        // In both cases we return a range spanning both words so VS Code
+        // underlines the whole compound keyword, not just one word.
+
+        const textBefore = lineText.substring(0, wordRange.start.character);
+        const textAfter  = lineText.substring(wordRange.end.character);
+
+        // Case a: word before cursor forms a compound key
+        const wordBeforeMatch = textBefore.match(/\b(\w+)(\s+)$/);
+        if (wordBeforeMatch) {
+            const compoundKey = `${wordBeforeMatch[1].toLowerCase()} ${wordKey}`;
+            if (KEYWORD_DOCS[compoundKey]) {
+                const compoundStart = wordRange.start.translate(0, -(wordBeforeMatch[0].length));
+                const compoundRange = new vscode.Range(compoundStart, wordRange.end);
+                return new vscode.Hover(
+                    new vscode.MarkdownString(KEYWORD_DOCS[compoundKey]),
+                    compoundRange
+                );
+            }
+        }
+
+        // Case b: word after cursor forms a compound key
+        const wordAfterMatch = textAfter.match(/^(\s+)(\w+)\b/);
+        if (wordAfterMatch) {
+            const compoundKey = `${wordKey} ${wordAfterMatch[2].toLowerCase()}`;
+            if (KEYWORD_DOCS[compoundKey]) {
+                const compoundEnd = wordRange.end.translate(0, wordAfterMatch[0].length);
+                const compoundRange = new vscode.Range(wordRange.start, compoundEnd);
+                return new vscode.Hover(
+                    new vscode.MarkdownString(KEYWORD_DOCS[compoundKey]),
+                    compoundRange
+                );
+            }
+        }
+
+        // Single keyword
         if (KEYWORD_DOCS[wordKey]) {
             return new vscode.Hover(new vscode.MarkdownString(KEYWORD_DOCS[wordKey]));
         }
