@@ -43,9 +43,30 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
     // First pass — collect all symbols
     lines.forEach((line, lineIndex) => {
 
+        // ── Skip comment lines entirely ───────────────────────────────────────
+        // VBScript comments start with ' (after optional whitespace).
+        // Nothing on a comment line should ever be registered as a symbol.
+        if (/^\s*'/.test(line)) return;
+
+        // ── Strip string literal contents and inline comments ─────────────────
+        // We need to match only real VBScript code, not text inside strings.
+        // Replace every quoted string with empty quotes ("" or ''), then strip
+        // anything after a bare ' (which is now guaranteed to be a comment).
+        //
+        // The callback returns:
+        //   m[0]+m[0]  → empty string literal ("" or '')  for quoted strings
+        //   ''         → nothing                           for ' comments
+        //
+        // This prevents SQL identifiers inside string values (ROW_NUMBER, EXEC
+        // usp_ProcessOrders, DENSE_RANK, etc.) from ever matching the patterns below.
+        const lineNoComment = line.replace(
+            /(['"])(?:(?!\1).)*\1|'.*$/g,
+            (m) => m.startsWith("'") ? '' : (m[0] + m[0])
+        );
+
         // ── Dim / ReDim / Public / Private ───────────────────────────────────
         // Match everything after the keyword up to an optional comment or end-of-line.
-        const dimMatch = line.match(/^\s*(?:Dim|ReDim|Public|Private)\s+([\w,\s]+?)\s*(?:'|$)/i);
+        const dimMatch = lineNoComment.match(/^\s*(?:Dim|ReDim|Public|Private)\s+([\w,\s]+?)\s*(?:'|$)/i);
         if (dimMatch) {
             const names = dimMatch[1].split(',').map((s: string) => s.trim()).filter(Boolean);
             for (const name of names) {
@@ -59,7 +80,8 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
         // which have their own handlers) and register the LHS as a variable so the
         // semantic provider can colour its usages throughout the file.
         // We skip names already registered to avoid duplicates.
-        const implicitMatch = line.match(/^\s*([a-zA-Z_]\w*)\s*=/i);
+        // Uses lineNoComment so SQL inside strings is never mistaken for an assignment.
+        const implicitMatch = lineNoComment.match(/^\s*([a-zA-Z_]\w*)\s*=/i);
         if (implicitMatch) {
             const name = implicitMatch[1];
             const nameLower = name.toLowerCase();
@@ -76,7 +98,7 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
         // ── Const ─────────────────────────────────────────────────────────────
         // Greedy value capture (.+) so the full value is captured before an optional comment.
         // The trailing /i flag keeps case-insensitive matching for 'Const' keyword.
-        const constMatch = line.match(/^\s*(?:Public\s+|Private\s+)?Const\s+(\w+)\s*=\s*(.+?)\s*(?:'.*)?$/i);
+        const constMatch = lineNoComment.match(/^\s*(?:Public\s+|Private\s+)?Const\s+(\w+)\s*=\s*(.+?)\s*(?:'.*)?$/i);
         if (constMatch) {
             result.constants.push({
                 name:     constMatch[1],
@@ -88,7 +110,7 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
 
         // ── Function / Sub ────────────────────────────────────────────────────
         // Parentheses are optional in VBScript — Sub ConnectDb is valid without ()
-        const funcMatch = line.match(/^\s*(?:Public\s+|Private\s+)?(Function|Sub)\s+(\w+)\s*(?:\(([^)]*)\))?/i);
+        const funcMatch = lineNoComment.match(/^\s*(?:Public\s+|Private\s+)?(Function|Sub)\s+(\w+)\s*(?:\(([^)]*)\))?/i);
         if (funcMatch) {
             // Parse individual parameter names — strips ByVal/ByRef and array () markers
             const rawParams  = funcMatch[3] ? funcMatch[3].trim() : '';
@@ -111,7 +133,7 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
         }
 
         // ── Set x = [Server.]CreateObject("...") ─────────────────────────────
-        const setMatch = line.match(/\bSet\s+(\w+)\s*=\s*(?:Server\.)?CreateObject\s*\(\s*["']([^"']+)["']\s*\)/i);
+        const setMatch = lineNoComment.match(/\bSet\s+(\w+)\s*=\s*(?:Server\.)?CreateObject\s*\(\s*["']([^"']+)["']\s*\)/i);
         if (setMatch) {
             result.comVariables.push({
                 name:     setMatch[1],

@@ -14,6 +14,16 @@ import { addRegionHighlights } from './highlight';
 export function activate(context: vscode.ExtensionContext) {
     console.log('Classic ASP Language Support is now active!');
 
+    // ── Disable word-based suggestions for ASP files ──────────────────────────
+    // VS Code's built-in word scanner suggests any word it finds in the open
+    // document — including SQL identifiers inside string literals (ROW_NUMBER,
+    // DENSE_RANK, usp_ProcessOrders, etc.).  We disable it only for the 'asp'
+    // language so it has no effect on JS, CSS, or any other language the user
+    // has open.  All real completions (Dim variables, functions, keywords, COM
+    // members) come from our own providers and are unaffected by this setting.
+    const aspConfig = vscode.workspace.getConfiguration('editor', { languageId: 'asp' });
+    aspConfig.update('wordBasedSuggestions', 'off', vscode.ConfigurationTarget.Global);
+
     // Add ASP region highlighting
     addRegionHighlights(context);
 

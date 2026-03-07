@@ -190,6 +190,25 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             return [];
         }
 
+        // ── Standalone underscore guard ───────────────────────────────────────
+        // Suppress completions when the current word being typed is exactly `_`
+        // and nothing else — this is the VBScript line continuation symbol.
+        //
+        // We get the word immediately before the cursor using VS Code's word range.
+        // If it is a single `_` character, return nothing.
+        //
+        // Typing `row_` → word is `row_`  → NOT suppressed (more than just `_`)
+        // Typing `_v`   → word is `_v`    → NOT suppressed
+        // Typing `_`    → word is `_`     → SUPPRESSED
+        //
+        // This is the most reliable approach because it works regardless of what
+        // comes before the underscore on the line.
+        const wordRange = document.getWordRangeAtPosition(position, /[\w]+/);
+        const currentWord = wordRange ? document.getText(wordRange) : '';
+        if (currentWord === '_') {
+            return [];
+        }
+
         // Collect all symbols from this document + any included files
         const allSymbols = collectAllSymbols(document);
         const comVarMap  = buildComVarMap(documentText, allSymbols.comVariables);
