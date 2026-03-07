@@ -7,7 +7,7 @@ import { CssHoverProvider } from './providers/cssHoverProvider';
 import { registerCssDiagnostics } from './providers/cssDiagnosticsProvider';
 import { JsCompletionProvider } from './providers/jsCompletionProvider';
 import { IncludePathCompletionProvider, AspDefinitionProvider } from './providers/includeProvider';
-import { IncludeDocumentLinkProvider, HtmlAttributeLinkProvider } from './providers/linkProvider';
+import { IncludeDocumentLinkProvider, HtmlAttributeLinkProvider, HtmlAttributePathCompletionProvider } from './providers/linkProvider';
 import { AspSemanticTokensProvider, ASP_SEMANTIC_LEGEND } from './providers/aspSemanticProvider';
 import { AspHoverProvider } from './providers/aspHoverProvider';
 import { addRegionHighlights } from './highlight';
@@ -75,6 +75,18 @@ export function activate(context: vscode.ExtensionContext) {
         'asp', new HtmlAttributeLinkProvider()
     );
 
+    // HTML attribute path completion — fires inside href, src, action, data-src values.
+    // Same trigger characters as the #include completion provider.
+    const htmlAttributePathProvider = vscode.languages.registerCompletionItemProvider(
+        'asp', new HtmlAttributePathCompletionProvider(),
+        '"', "'", '/', '\\', '.',
+        'a','b','c','d','e','f','g','h','i','j','k','l','m',
+        'n','o','p','q','r','s','t','u','v','w','x','y','z',
+        'A','B','C','D','E','F','G','H','I','J','K','L','M',
+        'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+        '0','1','2','3','4','5','6','7','8','9','_','-'
+    );
+
     // ── Go To Definition ──────────────────────────────────────────────────────
     // F12 / Ctrl+Click on functions, subs, variables, constants, and COM vars.
     // Also guards against HTML attribute values falling through to symbol lookup.
@@ -124,6 +136,31 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // ── Auto-trigger path suggestions inside href/src/action/data-src values ──
+    // VS Code's built-in HTML provider closes the suggestion session with
+    // isIncomplete:false, preventing our provider from firing on plain letter
+    // keystrokes. Force-retriggering on every document change inside a recognised
+    // attribute value bypasses this entirely.
+    const htmlAttrPathTrigger = vscode.workspace.onDidChangeTextDocument(e => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || editor.document !== e.document) return;
+        if (e.document.languageId !== 'asp') return;
+        if (e.contentChanges.length === 0) return;
+
+        const change   = e.contentChanges[0];
+        const position = change.range.start;
+        const lineText = e.document.lineAt(position.line).text;
+
+        // Only re-trigger when the change was a single character (normal typing)
+        if (change.text.length !== 1) return;
+
+        const textBefore = lineText.substring(0, position.character + 1);
+        const attrPattern = /\b(href|src|action|data-src)\s*=\s*["'][^"']*$/i;
+        if (!attrPattern.test(textBefore)) return;
+
+        setTimeout(() => vscode.commands.executeCommand('editor.action.triggerSuggest'), 50);
+    });
+
     // ── Subscriptions ─────────────────────────────────────────────────────────
     context.subscriptions.push(
         formatter,
@@ -135,11 +172,13 @@ export function activate(context: vscode.ExtensionContext) {
         includePathProvider,
         includeDocumentLinkProvider,
         htmlAttributeLinkProvider,
+        htmlAttributePathProvider,
         definitionProvider,
         semanticProvider,
         semanticTokensProviderInstance,
         aspHoverProvider,
         inlineStyleTrigger,
+        htmlAttrPathTrigger,
     );
 }
 
