@@ -18,15 +18,15 @@ Const PI = 3.14159
 
 ' ── SECTION 2  Assignments and expressions ───────────────────────────────────
 
-userName    = "Alice"
-userAge     = 30
-isActive    = True
-score       = 42
+userName = "Alice"
+userAge = 30
+isActive = True
+score = 42
 errorMessage = ""
 
-totalCount  = userAge + score
-maxScore    = 100
-minScore    = 0
+totalCount = userAge + score
+maxScore = 100
+minScore = 0
 
 
 ' ── SECTION 3  If / ElseIf / Else / End If ───────────────────────────────────
@@ -74,7 +74,7 @@ For i = 1 To 10
 Next
 
 ' With Step
-For i = 10 To 1 Step -1
+For i = 10 To 1 Step - 1
     countdown = countdown & i & " "
 Next
 
@@ -92,8 +92,8 @@ Set itemList = Server.CreateObject("Scripting.Dictionary")
 itemList.Add "one", 1
 itemList.Add "two", 2
 
-For Each key In itemList
-    Response.Write key & " = " & itemList(key) & "<br>"
+For Each Key In itemList
+    Response.Write Key & " = " & itemList(Key) & "<br>"
 Next
 
 
@@ -159,8 +159,8 @@ Sub LogMessage(msg)
 End Sub
 
 Sub ResetCounters()
-    total        = 0
-    attempts     = 0
+    total = 0
+    attempts = 0
     runningTotal = 0
 End Sub
 
@@ -201,7 +201,7 @@ If Err.Number <> 0 Then
     Err.Clear
 End If
 
-On Error GoTo 0
+On Error Goto 0
 
 
 ' ── SECTION 11  With block ───────────────────────────────────────────────────
@@ -211,7 +211,7 @@ Set rs = Server.CreateObject("ADODB.Recordset")
 
 With rs
     .CursorType = 3
-    .LockType   = 1
+    .LockType = 1
     .Open "SELECT * FROM dbo.Users", conn
     Do While Not .EOF
         Response.Write .Fields("Name") & "<br>"
@@ -223,7 +223,7 @@ End With
 
 ' ── SECTION 12  Set / Nothing / Is ───────────────────────────────────────────
 
-Set rs   = Nothing
+Set rs = Nothing
 Set conn = Nothing
 
 If conn Is Nothing Then
@@ -244,9 +244,9 @@ Dim a, b, result
 a = 10
 b = 3
 
-result = a Mod b          ' Mod
-result = a \ b            ' integer division
-result = Not isActive     ' Not
+result = a Mod b ' Mod
+result = a \ b ' integer division
+result = Not isActive ' Not
 result = isActive And True
 result = isActive Or False
 result = isActive Xor True
@@ -260,9 +260,9 @@ Dim raw
 raw = "42"
 
 If IsNumeric(raw) Then score = CInt(raw)
-If IsDate(raw)    Then logDate = CDate(raw)
-If IsNull(raw)    Then raw = ""
-If IsEmpty(raw)   Then raw = "default"
+If IsDate(raw) Then logDate = CDate(raw)
+If IsNull(raw) Then raw = ""
+If IsEmpty(raw) Then raw = "default"
 If IsArray(scores) Then Response.Write "Is array"
 
 result = CStr(score) & " " & CInt("5") & " " & CDbl("3.14")
