@@ -312,6 +312,63 @@ function isLineContinuation(lineTextUpToCursor: string): boolean {
     return LINE_CONTINUATION_BEFORE_PATTERNS.some(p => p.test(beforeUnderscore));
 }
 
+// ── String-continuation alignment helpers ─────────────────────────────────
+
+/**
+ * Given a line that ends with `& _` or `+ _` and contains a string literal,
+ * returns the column index of the opening `"` of that string.
+ * Returns -1 if no string literal is found on the line.
+ *
+ * Example:
+ *   `    stmt = "SELECT " & _`  →  11  (column of the first ")
+ */
+function getStringAlignColumn(lineText: string): number {
+    // Strip the trailing ` & _` / ` + _` so we search only the value part.
+    const stripped = lineText.replace(/\s*[&+]\s*_\s*$/, '');
+    const col = stripped.indexOf('"');
+    return col; // -1 if no quote found
+}
+
+/**
+ * Scans upward from `fromLine` (exclusive) to find the first line of a
+ * VBScript line-continuation chain — i.e. the line whose previous line does
+ * NOT end with `_`.  Returns that line's leading whitespace (base indent).
+ *
+ * If the scan reaches the top of the document without finding a non-continuation
+ * predecessor, it returns the indent of the topmost line examined.
+ */
+function findContinuationChainBaseIndent(
+    document: vscode.TextDocument,
+    fromLine: number,
+): string {
+    // Walk upward. The chain looks like:
+    //   anotherlongstmt = "..." & _   <- opener (no _ on the line BEFORE it)
+    //                     "..." & _   <- mid-chain continuation
+    //                     "..."       <- fromLine (last line, no _)
+    //
+    // Skip fromLine itself (no _), then skip every line that DOES end with _,
+    // and return the indent of the first line that does NOT end with _ — that
+    // is the statement opener.
+    let skippedFromLine = false;
+    let lastChainLineIndent = document.lineAt(fromLine).text.match(/^(\s*)/)?.[1] ?? '';
+    for (let i = fromLine; i >= 0; i--) {
+        const text = document.lineAt(i).text;
+        // Blank line = statement boundary — the previous chain line is the opener.
+        if (!text.trim()) { return lastChainLineIndent; }
+        const isContinuation = /(?:^|\s)_\s*$/.test(text.trim());
+        if (!skippedFromLine) {
+            skippedFromLine = true; // fromLine itself — skip it
+            continue;
+        }
+        if (!isContinuation) {
+            return text.match(/^(\s*)/)?.[1] ?? ''; // statement opener
+        }
+        // Line ends with _ — mid-chain continuation, record its indent and keep going
+        lastChainLineIndent = text.match(/^(\s*)/)?.[1] ?? '';
+    }
+    return lastChainLineIndent;
+}
+
 // ── Suppress suggestions on line-continuation _ ───────────────────────────
 // onDidChangeTextDocument fires synchronously after every edit, before VS Code
 // has a chance to show the (stale) cached completion list.  If the typed char
@@ -589,17 +646,70 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
                 return;
             }
 
-            // Line continuation (_) → next line gets +1 indent.
-            // In VBScript, a trailing _ (preceded by whitespace, or
-            // the whole trimmed line is _) means the statement continues
-            // on the next line. Indent one extra level so the continuation
-            // is visually grouped under the opening line.
+            // ── Line continuation (_) ────────────────────────────────────
+            //
+            // When the current line ends with `& _` or `+ _` we try to align
+            // the next line to the opening `"` of the string on THIS line.
+            //
+            // Three sub-cases:
+            //   A. Current line has a string literal → align to its `"` column.
+            //   B. Current line has no string (e.g. bare `& _`) but a previous
+            //      continuation line established a column → stay at that column
+            //      (detected because `indent` already equals that column's spaces).
+            //   C. No string anywhere in the chain → fall back to indent+indentUnit.
+            //
+            // When the current line does NOT end with `_` but the previous line
+            // DID (i.e. we are on the last line of a continuation chain), snap
+            // back to the base-statement indent so the next statement starts
+            // at the correct column.
             if (/(?:^|\s)_\s*$/.test(currentLineText)) {
-                editor.edit(eb => eb.insert(position, '\n' + indent + indentUnit)).then(() => {
-                    const p = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
-                    editor.selection = new vscode.Selection(p, p);
-                });
+                // Lines ending with & _ or + _ (string concatenation continuation)
+                const isStringConcat = /[&+]\s*_\s*$/.test(currentLineText);
+                if (isStringConcat) {
+                    const col = getStringAlignColumn(line.text);
+                    if (col >= 0) {
+                        // Case A: align to the `"` on this line.
+                        const alignIndent = ' '.repeat(col);
+                        editor.edit(eb => eb.insert(position, '\n' + alignIndent)).then(() => {
+                            const p = new vscode.Position(position.line + 1, col);
+                            editor.selection = new vscode.Selection(p, p);
+                        });
+                    } else {
+                        // Case B/C: no string on this line — keep current column.
+                        editor.edit(eb => eb.insert(position, '\n' + indent)).then(() => {
+                            const p = new vscode.Position(position.line + 1, indent.length);
+                            editor.selection = new vscode.Selection(p, p);
+                        });
+                    }
+                } else {
+                    // Non-string continuation (e.g. arithmetic / assignment split):
+                    // give +1 indent level as before.
+                    editor.edit(eb => eb.insert(position, '\n' + indent + indentUnit)).then(() => {
+                        const p = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
+                        editor.selection = new vscode.Selection(p, p);
+                    });
+                }
                 return;
+            }
+
+            // ── Snap back after last continuation line ───────────────────
+            // If the line above this one ended with `_`, we are on the final
+            // line of a continuation chain. On Enter, snap back to the indent
+            // of the statement that started the chain (scan up past all `_` lines).
+            {
+                let prevNonEmpty = '';
+                for (let i = position.line - 1; i >= 0; i--) {
+                    const t = document.lineAt(i).text;
+                    if (t.trim()) { prevNonEmpty = t; break; }
+                }
+                if (/(?:^|\s)_\s*$/.test(prevNonEmpty.trim())) {
+                    const baseIndent = findContinuationChainBaseIndent(document, position.line);
+                    editor.edit(eb => eb.insert(position, '\n' + baseIndent)).then(() => {
+                        const p = new vscode.Position(position.line + 1, baseIndent.length);
+                        editor.selection = new vscode.Selection(p, p);
+                    });
+                    return;
+                }
             }
 
             // Block opener → next line +1
