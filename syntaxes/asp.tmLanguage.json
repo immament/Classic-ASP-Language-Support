@@ -42,7 +42,8 @@
                         {
                             "include": "#vbscript-code"
                         }
-                    ]
+                    ],
+                    "applyEndPatternLast": 1
                 },
                 {
                     "comment": "ASP code block <%",
@@ -64,7 +65,8 @@
                         {
                             "include": "#vbscript-code"
                         }
-                    ]
+                    ],
+                    "applyEndPatternLast": 1
                 }
             ]
         },
@@ -122,7 +124,7 @@
                                     "name": "punctuation.definition.comment.asp"
                                 }
                             },
-                            "end": "\\n|(?=%>)"
+                            "end": "\\n"
                         }
                     ]
                 },
@@ -144,7 +146,7 @@
                                     "name": "punctuation.definition.comment.asp"
                                 }
                             },
-                            "end": "\\n|(?=%>)"
+                            "end": "\\n"
                         }
                     ]
                 }
@@ -414,7 +416,7 @@
                     "match": "=|>=|<=|<>|<|>|\\+|-|\\*|/|\\\\|\\^|&|(?i)\\b(Mod)\\b"
                 },
                 {
-                    "comment": "Parentheses and square brackets \u2014 gives them bracket-pair colours in VBScript",
+                    "comment": "Parentheses and square brackets — gives them bracket-pair colours in VBScript",
                     "name": "punctuation.bracket.asp",
                     "match": "[()\\[\\]]"
                 }
@@ -437,7 +439,7 @@
             ]
         },
         "com-members": {
-            "comment": "COM object members accessed via dot notation \u2014 covers ADODB.Recordset, ADODB.Connection, ADODB.Command, Scripting.Dictionary, Scripting.FileSystemObject, MSXML2, WScript.Shell. All share one colour (support.function.com.asp) so themes treat them consistently.",
+            "comment": "COM object members accessed via dot notation — covers ADODB.Recordset, ADODB.Connection, ADODB.Command, Scripting.Dictionary, Scripting.FileSystemObject, MSXML2, WScript.Shell. All share one colour (support.function.com.asp) so themes treat them consistently.",
             "patterns": [
                 {
                     "comment": "Matches the member name after any dot, e.g. rs.EOF, conn.Execute, dict.Add. Only the member after the dot gets this colour.",
