@@ -14,7 +14,7 @@
 ---
 
 <h4 align="center">
-    <em>"Finally, a formatter that understands Classic ASP! This extension has made maintaining legacy codebases so much easier."</em>
+  <em>"Finally, an extension that understands Classic ASP! Because legacy codebases deserve support too." ¯\_(ツ)_/¯</em>
 </h4>
 
 ---
