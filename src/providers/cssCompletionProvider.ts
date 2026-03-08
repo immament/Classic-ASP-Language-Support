@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getCSSLanguageService, CompletionItemKind as LsKind, InsertTextFormat } from 'vscode-css-languageservice';
-import { getZone, buildCssDoc, getInlineStyleContext, buildInlineCssDoc } from './cssUtils';
+import { getZone, buildCssDoc, getInlineStyleContext, buildInlineCssDoc } from '../utils/cssUtils';
 
 const cssService = getCSSLanguageService();
 

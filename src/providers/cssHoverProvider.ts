@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getCSSLanguageService } from 'vscode-css-languageservice';
-import { getZone, buildCssDoc } from './cssUtils';
+import { getZone, buildCssDoc } from '../utils/cssUtils';
 
 const cssService = getCSSLanguageService();
 

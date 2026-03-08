@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { collectAllSymbols, isCursorInHtmlFileLinkAttribute } from './includeProvider';
-import { getZone } from './aspUtils';
+import { getZone } from '../utils/aspUtils';
 import * as path from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────

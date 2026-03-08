@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { collectAllSymbols } from './includeProvider';
 import { isInsideAspBlock } from '../utils/documentHelper';
-import { getZone } from './aspUtils';
+import { getZone } from '../utils/aspUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Semantic token legend — must match contributes.semanticTokenScopes in package.json

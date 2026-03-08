@@ -6,7 +6,7 @@
 
 import * as vscode from 'vscode';
 import { getCSSLanguageService, DiagnosticSeverity as LsSeverity } from 'vscode-css-languageservice';
-import { buildCssDoc } from './cssUtils';
+import { buildCssDoc } from '../utils/cssUtils';
 
 const cssService = getCSSLanguageService();
 
