@@ -65,23 +65,39 @@ let _placeholderCounter = 0;
  * Returns true if the source has unmatched <% or %> tags.
  * An unclosed <% would cause the masking regex to consume everything after it.
  *
- * Uses the same comment-aware logic as isInsideAspBlock: %> on a VBScript
- * comment line (first non-whitespace char is ') is never counted as a close tag,
- * and %> inside string literals is also ignored.
+ * Skips:
+ *  - HTML comments  <!-- ... -->  entirely (ASP tags inside them are not real)
+ *  - VBScript comment lines (first non-whitespace char is ') inside ASP blocks
+ *  - %> inside string literals inside ASP blocks
  */
 function hasUnclosedAspTags(code: string): boolean {
-    let depth = 0;
-    let i     = 0;
+    let depth   = 0;
+    let i       = 0;
+    let inHtmlComment = false;
 
     while (i < code.length) {
+        // ── HTML comment open  <!-- ──────────────────────────────────────────
+        if (!inHtmlComment && depth === 0 &&
+            code[i] === '<' && code.slice(i, i + 4) === '<!--') {
+            inHtmlComment = true;
+            i += 4;
+            continue;
+        }
+        // ── HTML comment close  --> ──────────────────────────────────────────
+        if (inHtmlComment) {
+            if (code.slice(i, i + 3) === '-->') { inHtmlComment = false; i += 3; }
+            else { i++; }
+            continue;
+        }
+
+        // ── ASP open  <% ─────────────────────────────────────────────────────
         if (code[i] === '<' && code[i + 1] === '%') {
             depth++;
             i += 2;
             continue;
         }
 
-        // Only look for %> when we are inside an ASP block (depth > 0).
-        // Process line-by-line so comment lines are skipped entirely.
+        // ── Inside ASP block: scan line-by-line ──────────────────────────────
         if (depth > 0) {
             const lineEnd  = code.indexOf('\n', i);
             const lineText = lineEnd === -1 ? code.slice(i) : code.slice(i, lineEnd + 1);
@@ -93,30 +109,20 @@ function hasUnclosedAspTags(code: string): boolean {
                 continue;
             }
 
-            // Scan the line for %> outside string literals
-            let j     = i;
-            let inStr = false;
-            let found = false;
-
+            // Scan line for %> outside string literals
+            let j = i, inStr = false, found = false;
             while (j < end) {
                 if (code[j] === '"') {
                     if (inStr && j + 1 < end && code[j + 1] === '"') { j += 2; continue; }
-                    inStr = !inStr;
-                    j++;
-                    continue;
+                    inStr = !inStr; j++; continue;
                 }
                 if (!inStr && code[j] === '%' && j + 1 < code.length && code[j + 1] === '>') {
                     depth--;
-                    if (depth < 0) { return true; } // stray %>
-                    j += 2;
-                    found = true;
-                    // After closing %>, exit line-scan and resume outer loop from j
-                    i = j;
-                    break;
+                    if (depth < 0) { return true; }
+                    j += 2; found = true; i = j; break;
                 }
                 j++;
             }
-
             if (!found) { i = end; }
             continue;
         }
@@ -180,19 +186,79 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
 
     const aspBlocks: AspBlock[] = [];
 
-    const maskedCode = code.replace(/([ \t]*)(<%[\s\S]*?%>)/g, (match, _indent, aspBlock, offset) => {
-        const kind       = classifyOffset(code, offset);
-        const lineNumber = code.slice(0, offset).split('\n').length - 1;
-        const id         = `ASPPH${_placeholderCounter++}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+    // Manual scan so we can skip <% ... %> blocks that sit inside an HTML
+    // comment <!-- ... -->.  A regex replace has no context awareness.
+    let   maskedCode     = '';
+    let   pos            = 0;
+    let   inHtmlComment  = false;
 
-        aspBlocks.push({ code: aspBlock, id, lineNumber, kind });
-
-        switch (kind) {
-            case 'inline': return `ASPINLINE_${id}_END`;
-            case 'midtag': return `data-asp-${id}="1"`;
-            default:       return `<!--${id}-->`;
+    while (pos < code.length) {
+        // ── HTML comment open  <!-- ────────────────────────────────────────
+        if (!inHtmlComment && code.slice(pos, pos + 4) === '<!--') {
+            // Before entering the comment check it's not an ASP placeholder we
+            // already emitted (those start with <!--ASPPH) — shouldn't happen
+            // here but guard anyway.
+            inHtmlComment = true;
+            maskedCode   += code[pos];
+            pos++;
+            continue;
         }
-    });
+        // ── HTML comment close  --> ────────────────────────────────────────
+        if (inHtmlComment) {
+            if (code.slice(pos, pos + 3) === '-->') { inHtmlComment = false; }
+            maskedCode += code[pos];
+            pos++;
+            continue;
+        }
+
+        // ── ASP block  <% ... %> ──────────────────────────────────────────
+        if (code[pos] === '<' && code[pos + 1] === '%') {
+            // Collect any leading horizontal whitespace on this line for indent tracking
+            const lineStart   = maskedCode.lastIndexOf('\n') + 1;
+            const leadingWS   = maskedCode.slice(lineStart).match(/^[ \t]*/)?.[0] ?? '';
+
+            // Find the matching %> (using the same comment-aware logic so a '
+            // comment line inside the block can't close it prematurely)
+            let end = pos + 2;
+            while (end < code.length) {
+                if (code[end] === '%' && code[end + 1] === '>') {
+                    // Check whether this %> is on a VBScript comment line
+                    const lineBegin = code.lastIndexOf('\n', end - 1) + 1;
+                    const lineUpToClose = code.slice(lineBegin, end).trimStart();
+                    if (!lineUpToClose.startsWith("'")) {
+                        end += 2; // include the %>
+                        break;
+                    }
+                }
+                end++;
+            }
+
+            const aspBlock   = code.slice(pos, end);
+            const kind       = classifyOffset(code, pos);
+            const lineNumber = code.slice(0, pos).split('\n').length - 1;
+            const id         = `ASPPH${_placeholderCounter++}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+
+            aspBlocks.push({ code: aspBlock, id, lineNumber, kind });
+
+            // Replace leading whitespace + block with the placeholder
+            // (strip the leadingWS we already emitted so the placeholder
+            //  takes its place cleanly)
+            if (leadingWS && maskedCode.endsWith(leadingWS)) {
+                maskedCode = maskedCode.slice(0, maskedCode.length - leadingWS.length);
+            }
+
+            switch (kind) {
+                case 'inline': maskedCode += `ASPINLINE_${id}_END`; break;
+                case 'midtag': maskedCode += `data-asp-${id}="1"`; break;
+                default:       maskedCode += `<!--${id}-->`; break;
+            }
+            pos = end;
+            continue;
+        }
+
+        maskedCode += code[pos];
+        pos++;
+    }
 
     // ── Step 2: Run Prettier on the masked HTML ──────────────────────────────
 

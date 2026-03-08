@@ -49,6 +49,14 @@ export function isInsideAspBlock(text: string, offset: number): boolean {
 
     while (i < text.length) {
         if (!inAsp) {
+            // Skip HTML comment  <!-- ... -->  before looking for <%
+            // so that <% inside an HTML comment is never treated as a real ASP open.
+            if (text.slice(i, i + 4) === '<!--') {
+                const closeIdx = text.indexOf('-->', i + 4);
+                i = closeIdx === -1 ? text.length : closeIdx + 3;
+                continue;
+            }
+
             // Outside ASP — look for the next <%
             const openIdx = text.indexOf('<%', i);
             if (openIdx === -1) { return false; }      // no more ASP blocks

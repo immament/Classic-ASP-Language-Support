@@ -118,6 +118,27 @@ function formatMultiLineAspBlock(
         const raw     = lines[i];
         const trimmed = raw.trim();
 
+        // ── VBScript comment line — MUST be checked before <% / %> ────────
+        // A line like  ' <%response.write x%>  trims to start with '
+        // but the old code hit the startsWith('<%') branch first and
+        // treated the embedded tag as real code.  Comments always win.
+        if (trimmed.startsWith("'")) {
+            // Align comment with the indent of the next real code line.
+            let commentLevel = aspIndentLevel;
+            for (let j = i + 1; j < lines.length; j++) {
+                const next = lines[j].trim();
+                if (next && !next.startsWith("'") && next !== '%>') {
+                    commentLevel = applyIndentBefore(next, aspIndentLevel, [...selectCaseStack]).level;
+                    break;
+                }
+            }
+            const aspIndent = getIndentString(baseLevel + commentLevel, settings.useTabs, settings.indentSize);
+            formattedLines.push(aspIndent + trimmed);
+            prevHadContinuation = false;
+            isInSQLBlock        = false;
+            continue;
+        }
+
         // ── <% opening tag line ──────────────────────────────────────────
         if (trimmed.startsWith('<%')) {
             if (trimmed === '<%') {
@@ -196,24 +217,6 @@ function formatMultiLineAspBlock(
             continue;
         }
 
-        // ── VBScript comment line ────────────────────────────────────────
-        if (trimmed.startsWith("'")) {
-            // Align comment with the indent of the next real code line.
-            let commentLevel = aspIndentLevel;
-            for (let j = i + 1; j < lines.length; j++) {
-                const next = lines[j].trim();
-                if (next && !next.startsWith("'") && next !== '%>') {
-                    commentLevel = applyIndentBefore(next, aspIndentLevel, [...selectCaseStack]).level;
-                    break;
-                }
-            }
-            const aspIndent = getIndentString(baseLevel + commentLevel, settings.useTabs, settings.indentSize);
-            formattedLines.push(aspIndent + trimmed);
-            prevHadContinuation = false;
-            isInSQLBlock        = false;
-            continue;
-        }
-
         // ── Line-continuation continuation line ──────────────────────────
         if (prevHadContinuation && trimmed.startsWith('"')) {
             if (isInSQLBlock) {
@@ -288,10 +291,11 @@ function applyIndentBefore(
     }
 
     // Standard dedent-before keywords.
+    // "Next" must NOT match "On Error Resume Next" — that is not a For/Next closer.
     if (
-        /^\s*end\s+(if|sub|function|with|class|property)\b/.test(lower) ||
-        /^\s*(loop|next|wend)(\s|$)/.test(lower)                         ||
-        /^\s*else(\s|$)/.test(lower)                                      ||
+        /^\s*end\s+(if|sub|function|with|class|property)\b/.test(lower)             ||
+        (/^\s*(loop|next|wend)(\s|$)/.test(lower) && !/resume\s+next/.test(lower))  ||
+        /^\s*else(\s|$)/.test(lower)                                                 ||
         /^\s*elseif\b/.test(lower)
     ) {
         return { level: Math.max(0, level - 1) };
@@ -323,19 +327,23 @@ function applyIndentAfter(
     if (/^\s*case(\s|$)/.test(lower)) return level + 1;
 
     // Standard indent-after keywords.
+    // Each rule has a guard to prevent false positives on closing keywords
+    // that happen to contain an opener word (e.g. "End With" contains "With").
     if (
-        /\bif\b.*\bthen\b/.test(lower)                         ||
-        /\bfor\b\s+\w+\s*=/.test(lower)                        ||
-        /\bfor\s+each\b/.test(lower)                           ||
-        // \bwhile\b must NOT match 'Loop While ...' — that is a closer, not an opener.
-        (/\bwhile\b/.test(lower) && !/^\s*loop\b/.test(lower))  ||
-        /\bdo\b(\s+while|\s+until)?(\s|$)/.test(lower)         ||
-        /\bsub\b\s+\w+/.test(lower)                ||
-        /\bfunction\b\s+\w+/.test(lower)           ||
-        /\bwith\b/.test(lower)                     ||
-        /\bclass\b\s+\w+/.test(lower)              ||
-        /\bproperty\s+(get|let|set)\b/.test(lower) ||
-        /^\s*else(\s|$)/.test(lower)               ||
+        /\bif\b.*\bthen\b/.test(lower)                                              ||
+        /\bfor\b\s+\w+\s*=/.test(lower)                                             ||
+        /\bfor\s+each\b/.test(lower)                                                ||
+        // "While" must NOT match "Loop While ..." (that is a Do/Loop post-condition closer).
+        (/\bwhile\b/.test(lower)   && !/^\s*loop\b/.test(lower))                    ||
+        /\bdo\b(\s+while|\s+until)?(\s|$)/.test(lower)                              ||
+        /\bsub\b\s+\w+/.test(lower)                                                ||
+        /\bfunction\b\s+\w+/.test(lower)                                           ||
+        // "With" must NOT match "End With".
+        (/\bwith\b/.test(lower)    && !/^\s*end\s+with\b/.test(lower))             ||
+        // "Class" must NOT match "End Class".
+        (/\bclass\b\s+\w+/.test(lower) && !/^\s*end\s+class\b/.test(lower))      ||
+        /\bproperty\s+(get|let|set)\b/.test(lower)                                  ||
+        /^\s*else(\s|$)/.test(lower)                                                 ||
         /^\s*elseif\b.*\bthen\b/.test(lower)
     ) {
         return level + 1;
@@ -420,7 +428,11 @@ function isSQLStatement(line: string): boolean {
         .test(removeStrings(line));
 }
 
-/** Strips string literals from a line so we only match keywords outside strings. */
+/**
+ * Strips string literals AND VBScript comment tails from a line so that
+ * keyword matching in applyIndentBefore / applyIndentAfter never fires on
+ * text inside a comment.  e.g.  `x = 1 ' End With`  →  `x = 1 `
+ */
 function removeStrings(line: string): string {
     let result   = '';
     let inString = false;
@@ -431,6 +443,8 @@ function removeStrings(line: string): string {
             if (i + 1 < line.length && line[i + 1] === '"') { i++; continue; }
             inString = !inString;
         } else if (!inString) {
+            // VBScript comment — everything from here to EOL is non-code.
+            if (line[i] === "'") { break; }
             result += line[i];
         }
     }
@@ -492,14 +506,14 @@ const PROPER_CASING_MAP: Record<string, string> = {
     'clientcertificate': 'ClientCertificate', 'contenttype': 'ContentType',
     'addheader': 'AddHeader', 'appendtolog': 'AppendToLog',
     'binarywrite': 'BinaryWrite', 'cacheecontrol': 'CacheControl',
-    'charset': 'Charset', 'clearheaders': 'ClearHeaders',
-    'contentlength': 'ContentLength', 'expires': 'Expires',
+    'clearheaders': 'ClearHeaders',
+    'contentlength': 'ContentLength',
     'expiresabsolute': 'ExpiresAbsolute', 'isclientconnected': 'IsClientConnected',
-    'pics': 'PICS', 'status': 'Status', 'mappath': 'MapPath',
+    'pics': 'PICS', 'mappath': 'MapPath',
     'scripttimeout': 'ScriptTimeout', 'htmlencode': 'HTMLEncode',
     'urlencode': 'URLEncode', 'createtextfile': 'CreateTextFile',
     'opentextfile': 'OpenTextFile', 'getlasterror': 'GetLastError',
-    'sessionid': 'SessionID', 'timeout': 'Timeout', 'codepage': 'CodePage',
+    'sessionid': 'SessionID', 'codepage': 'CodePage',
     'lcid': 'LCID', 'filesystemobject': 'FileSystemObject',
     'getfile': 'GetFile', 'getfolder': 'GetFolder', 'getdrive': 'GetDrive',
     'fileexists': 'FileExists', 'folderexists': 'FolderExists',
