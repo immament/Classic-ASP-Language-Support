@@ -505,7 +505,13 @@ function extractSqlGroup(
 
         if (!lineEndsWithContinuation(scanText, scanCol)) { break; }
 
+        // Advance to the next non-blank line, skipping over empty lines.
+        // A blank line inside a `& _` continuation chain is allowed in VBScript
+        // and should not break the SQL string group.
         scanLine++;
+        while (scanLine < lineCount && document.lineAt(scanLine).text.trim() === '') {
+            scanLine++;
+        }
         if (scanLine >= lineCount) { break; }
 
         scanText = document.lineAt(scanLine).text;
