@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { collectAllSymbols } from './includeProvider';
 import { isInsideAspBlock } from '../utils/documentHelper';
 import { getZone } from '../utils/aspUtils';
+import { VBSCRIPT_KEYWORDS_SET } from '../constants/aspKeywords';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Semantic token legend — must match contributes.semanticTokenScopes in package.json
@@ -1314,17 +1315,7 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VBScript keywords — never coloured as variables/functions
+// Imported from ../constants/aspKeywords as VBSCRIPT_KEYWORDS_SET.
+// Use VBSCRIPT_KEYWORDS_SET directly wherever this was used below.
 // ─────────────────────────────────────────────────────────────────────────────
-const VBSCRIPT_KEYWORDS = new Set([
-    'dim','redim','set','let','get','const','call','new',
-    'if','then','else','elseif','end','select','case',
-    'for','each','in','to','step','next',
-    'while','wend','do','loop','until',
-    'function','sub','class','property',
-    'private','public','default',
-    'and','or','not','xor','eqv','imp','is','mod',
-    'true','false','null','nothing','empty',
-    'with','exit','return','goto','on','error','resume',
-    'option','explicit','randomize',
-    'response','request','server','session','application',
-]);
+const VBSCRIPT_KEYWORDS = VBSCRIPT_KEYWORDS_SET;

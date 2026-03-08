@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { formatCompleteAspFile } from './formatter/htmlFormatter';
-import { HtmlCompletionProvider, registerAutoClosingTag, registerEnterKeyHandler, registerTabKeyHandler } from './providers/htmlCompletionProvider';
+import { HtmlCompletionProvider } from './providers/htmlCompletionProvider';
+import { registerAutoClosingTag, registerEnterKeyHandler, registerTabKeyHandler } from './providers/aspIndentProvider';
 import { AspCompletionProvider } from './providers/aspCompletionProvider';
 import { CssCompletionProvider } from './providers/cssCompletionProvider';
 import { CssHoverProvider } from './providers/cssHoverProvider';
