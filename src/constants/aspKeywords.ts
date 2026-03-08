@@ -77,3 +77,23 @@ export const VBSCRIPT_FUNCTIONS = [
     'TimeValue', 'Trim', 'TypeName', 'UBound', 'UCase', 'VarType', 'Weekday',
     'WeekdayName', 'Year'
 ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VBSCRIPT_KEYWORDS_SET
+// Flat lowercase Set used by aspSemanticProvider to skip colouring keywords
+// as user variables/functions. Derives from VBSCRIPT_KEYWORDS above so the
+// two never drift apart, then adds extra bare tokens that appear in VBScript
+// code but are not in the completion keyword list (mid-word tokens, operators,
+// built-in object names, etc.).
+// ─────────────────────────────────────────────────────────────────────────────
+export const VBSCRIPT_KEYWORDS_SET = new Set([
+    // All keywords from the completion list above (lowercased)
+    ...VBSCRIPT_KEYWORDS.map(kw => kw.keyword.toLowerCase()),
+    // Extra bare tokens not in the completion list
+    'end', 'each', 'in', 'to', 'step', 'until', 'then', 'wend', 'loop',
+    'eqv', 'imp', 'is', 'mod', 'xor',
+    'exit', 'return', 'goto', 'on', 'error', 'resume',
+    'randomize',
+    // Built-in ASP object names — should never be treated as user symbols
+    'response', 'request', 'server', 'session', 'application',
+]);
