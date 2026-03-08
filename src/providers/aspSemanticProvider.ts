@@ -738,6 +738,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             const midOffset  = lineOffset + Math.floor(lineText.length / 2);
             if (!isInsideAspBlock(text, midOffset)) { continue; }
 
+            const trimmedForComment733 = lineText.trimStart();
+            if (trimmedForComment733.startsWith("'") || /^rem\s/i.test(trimmedForComment733)) { continue; }
+
             let stripped = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
             const cpIdx = stripped.indexOf("'");
             if (cpIdx !== -1) { stripped = stripped.substring(0, cpIdx); }
@@ -846,6 +849,10 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             for (let li = fn.line; li <= fn.endLine; li++) {
                 const lineText = lineTextCache[li];
 
+                // Skip VBScript comment lines entirely — don't analyse them for return values
+                const trimmedForComment846 = lineText.trimStart();
+                if (trimmedForComment846.startsWith("'") || /^rem\s/i.test(trimmedForComment846)) { continue; }
+
                 // Strip string literals and comments for structural matching
                 let stripped = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
                 const cpIdx  = stripped.indexOf("'");
@@ -921,6 +928,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                     const midOffset  = lineOffset + Math.floor(lineText.length / 2);
                     if (!isInsideAspBlock(text, midOffset)) { continue; }
 
+                    const trimmedForComment918 = lineText.trimStart();
+                    if (trimmedForComment918.startsWith("'") || /^rem\s/i.test(trimmedForComment918)) { continue; }
+
                     let stripped3 = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
                     const cp3 = stripped3.indexOf("'");
                     if (cp3 !== -1) { stripped3 = stripped3.substring(0, cp3); }
@@ -990,6 +1000,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             const lineOffset = document.offsetAt(new vscode.Position(li, 0));
             const midOffset  = lineOffset + Math.floor(lineText.length / 2);
             if (!isInsideAspBlock(text, midOffset)) { continue; }
+
+            const trimmedForComment988 = lineText.trimStart();
+            if (trimmedForComment988.startsWith("'") || /^rem\s/i.test(trimmedForComment988)) { continue; }
 
             // Strip string literals — replace with a sentinel char (§) so we can
             // distinguish "there was a string here" from pure whitespace gaps.
@@ -1177,6 +1190,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             const lineOffset = document.offsetAt(new vscode.Position(li, 0));
             const midOffset  = lineOffset + Math.floor(lineText.length / 2);
             if (!isInsideAspBlock(text, midOffset)) { continue; }
+
+            const trimmedForComment1173 = lineText.trimStart();
+            if (trimmedForComment1173.startsWith("'") || /^rem\s/i.test(trimmedForComment1173)) { continue; }
 
             let lineIsSqlAppend = false;
             if (sqlVarPatterns.length > 0) {
