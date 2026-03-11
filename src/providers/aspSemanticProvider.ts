@@ -333,7 +333,27 @@ function findTableRanges(sql: string): Set<string> {
         const w2 = sig[i].val.toLowerCase();
 
         if (w2 === 'from' || w2 === 'join' || w2 === 'into' || w2 === 'update') {
-            addRanges(collectTableChain(sig, i + 1));
+            const next = i + 1;
+            // Subquery: FROM/JOIN ( SELECT ... ) [AS] alias — skip the subquery
+            // body and collect the alias after the closing ), e.g. ) b ON ...
+            if (next < sig.length && sig[next].type === 'paren' && sig[next].val === '(') {
+                let depth = 1;
+                let j = next + 1;
+                while (j < sig.length && depth > 0) {
+                    if (sig[j].type === 'paren') { depth += sig[j].val === '(' ? 1 : -1; }
+                    j++;
+                }
+                // j is now past the closing ) — look for optional AS then alias word
+                if (j < sig.length && sig[j].type === 'word' && sig[j].val.toLowerCase() === 'as') {
+                    j++;
+                }
+                if (j < sig.length && sig[j].type === 'word' &&
+                    !ALL_SQL_KEYWORDS.has(sig[j].val.toLowerCase())) {
+                    result.add(`${sig[j].off}:${sig[j].val.length}`);
+                }
+            } else {
+                addRanges(collectTableChain(sig, next));
+            }
         }
 
         // MERGE <table> AS alias
