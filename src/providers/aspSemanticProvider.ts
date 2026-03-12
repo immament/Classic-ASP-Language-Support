@@ -197,7 +197,13 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             }
         }
 
-        // Sub-pass 2: self-append propagation — repeat until stable
+        // Sub-pass 2: self-append propagation — repeat until stable.
+        // A variable qualifies only when:
+        //   (a) it has at least one self-append, AND
+        //   (b) every non-self-append looks like SQL (or there are none), AND
+        //   (c) at least one appended string contains SQL content.
+        // Guard (c) prevents plain string-builders like errMsg = errMsg & "Name is required."
+        // from being promoted just because all their assignments happen to be self-appends.
         let changed = true;
         while (changed) {
             changed = false;
@@ -207,6 +213,8 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                 if (selfAssigns.length === 0) { continue; }
                 const nonSelfAssigns = assignments.filter(a => !a.isSelfAppend);
                 if (nonSelfAssigns.length > 0 && !nonSelfAssigns.every(a => isSql(a.stitchedValue))) { continue; }
+                const allAppends = [...selfAssigns, ...nonSelfAssigns];
+                if (!allAppends.some(a => isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue))) { continue; }
                 sqlVars.add(varName);
                 changed = true;
             }
