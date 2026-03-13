@@ -413,13 +413,16 @@ export function registerAutoClosingTag(context: vscode.ExtensionContext) {
             const textBefore = line.text.substring(0, position.character + 1);
 
             if (textBefore.endsWith('<!--')) {
-                const textAfter = line.text.substring(position.character + 1);
-                if (!textAfter.trim().startsWith('-->')) {
-                    const insertPos = new vscode.Position(position.line, position.character + 1);
-                    editor.edit(eb => eb.insert(insertPos, '  -->')).then(() => {
-                        const p = new vscode.Position(position.line, position.character + 2);
-                        editor.selection = new vscode.Selection(p, p);
-                    });
+                // Don't auto-close inside a VBScript block — HTML comments are not valid there
+                if (!isInAspBlock(event.document, position)) {
+                    const textAfter = line.text.substring(position.character + 1);
+                    if (!textAfter.trim().startsWith('-->')) {
+                        const insertPos = new vscode.Position(position.line, position.character + 1);
+                        editor.edit(eb => eb.insert(insertPos, '  -->')).then(() => {
+                            const p = new vscode.Position(position.line, position.character + 2);
+                            editor.selection = new vscode.Selection(p, p);
+                        });
+                    }
                 }
             }
             return;
@@ -703,27 +706,13 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
                 }
             }
 
-
-
             // Block opener → next line +1
-            // Exception: a single-line If statement (e.g. `If x Then y = 1`) has a
-            // real statement after Then and is NOT a block opener — it needs no extra
-            // indent on the next line.  A multi-line If ends with Then (optionally
-            // followed only by a VBScript comment), so we detect the single-line form
-            // by checking whether a non-comment token appears after the Then keyword.
             if (VBSCRIPT_BLOCK_OPENERS.test(currentLineText)) {
-                // Matches single-line If: "If … Then <non-comment content>"
-                // The negative lookahead ensures Then is NOT at the end of meaningful content.
-                const isSingleLineIf = /^If\b.+\bThen\s+\S/i.test(currentLineText)
-                    && !/^If\b.+\bThen\s*'/i.test(currentLineText);
-                if (!isSingleLineIf) {
-                    editor.edit(eb => eb.insert(position, `\n${indent}${indentUnit}`)).then(() => {
-                        const p = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
-                        editor.selection = new vscode.Selection(p, p);
-                    });
-                    return;
-                }
-                // Single-line If — fall through to default (keep same indent level)
+                editor.edit(eb => eb.insert(position, `\n${indent}${indentUnit}`)).then(() => {
+                    const p = new vscode.Position(position.line + 1, indent.length + indentUnit.length);
+                    editor.selection = new vscode.Selection(p, p);
+                });
+                return;
             }
 
             // Default inside ASP → match current indent
