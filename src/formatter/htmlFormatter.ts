@@ -142,21 +142,42 @@ function hasUnclosedAspTags(code: string): boolean {
  */
 function classifyOffset(code: string, offset: number): AspBlockKind {
     let inQuote: string | null = null;
+    let i = offset - 1;
 
-    for (let i = offset - 1; i >= 0; i--) {
+    while (i >= 0) {
         const ch = code[i];
 
         if (inQuote) {
             if (ch === inQuote) inQuote = null;
-            continue;
+            i--; continue;
         }
 
         if (ch === '"' || ch === "'") {
             inQuote = ch; // hit closing quote while scanning backwards
-            continue;
+            i--; continue;
         }
 
-        if (ch === '>') return 'normal';
+        if (ch === '>') {
+            // If this > is part of a %> closing tag, it is NOT a real HTML tag
+            // boundary — skip backwards past the entire <% ... %> block and keep
+            // scanning. Without this guard, a pattern like:
+            //   <option <% If x Then %>selected<% End If %>>
+            // would make the second <% (End If) see the %> from the first block
+            // and incorrectly return 'normal', causing an HTML comment placeholder
+            // to be injected mid-tag and breaking Prettier.
+            if (i > 0 && code[i - 1] === '%') {
+                i -= 2; // step past %>
+                while (i >= 0) {
+                    if (code[i] === '<' && i + 1 < code.length && code[i + 1] === '%') {
+                        i--; // step past <%, continue outer loop
+                        break;
+                    }
+                    i--;
+                }
+                continue;
+            }
+            return 'normal'; // real HTML tag close — we are between tags
+        }
 
         if (ch === '<') {
             const after = code.substring(i + 1, i + 3);
@@ -164,6 +185,8 @@ function classifyOffset(code: string, offset: number): AspBlockKind {
             if (/^[a-zA-Z!?]/.test(after))   return 'midtag';  // opening/void tag
             return 'normal';
         }
+
+        i--;
     }
 
     return 'normal';
@@ -173,7 +196,9 @@ function classifyOffset(code: string, offset: number): AspBlockKind {
 
 export async function formatCompleteAspFile(code: string): Promise<string> {
     if (hasUnclosedAspTags(code)) {
-        console.warn('ASP formatter: unclosed <% or stray %> — skipping format.');
+        vscode.window.showWarningMessage(
+            'Formatting skipped — unclosed <% or stray %> detected. Fix the ASP tag mismatch first.'
+        );
         return code;
     }
 
@@ -278,7 +303,13 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             htmlWhitespaceSensitivity: prettierSettings.htmlWhitespaceSensitivity as any,
         });
     } catch (error) {
-        console.error('ASP formatter: Prettier failed — returning original.', error);
+        const msg = error instanceof Error ? error.message : String(error);
+        const lineMatch = msg.match(/\((\d+):(\d+)\)/);
+        const location  = lineMatch ? ` (line ${lineMatch[1]})` : '';
+        vscode.window.showWarningMessage(
+            `Formatting skipped — Prettier could not parse the HTML${location}. ` +
+            `This is usually caused by a missing or extra HTML tag. Fix the highlighted warnings first.`
+        );
         return code;
     }
 
@@ -291,9 +322,9 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             block.id;
 
         if (!prettifiedCode.includes(needle)) {
-            console.error(
-                `ASP formatter: placeholder for block at line ${block.lineNumber} was ` +
-                `lost by Prettier — returning original.`
+            vscode.window.showWarningMessage(
+                `Formatting skipped — an ASP block on line ${block.lineNumber + 1} was removed by Prettier. ` +
+                `This usually happens when a <% %> block is in an unexpected position inside an HTML tag.`
             );
             return code;
         }
