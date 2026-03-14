@@ -54,7 +54,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Completion providers ──────────────────────────────────────────────────
     const htmlCompletionProvider = vscode.languages.registerCompletionItemProvider(
-        'asp', new HtmlCompletionProvider(), '<', ' ', '='
+        'asp', new HtmlCompletionProvider(), '<', '/', ' ', '='
     );
 
     const aspCompletionProvider = vscode.languages.registerCompletionItemProvider(
