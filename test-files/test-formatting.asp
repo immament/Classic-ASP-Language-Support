@@ -7,7 +7,7 @@
 '   Press Ctrl+Z to undo and return to the before state.
 '
 ' WHAT SHOULD CHANGE:  keyword casing, operator spacing, indentation,
-'                      comma spacing, <% %> tag placement.
+'                      comma spacing, asp tag placement.
 ' WHAT MUST NOT CHANGE: content inside string literals.
 
 
