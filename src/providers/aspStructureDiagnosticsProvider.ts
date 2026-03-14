@@ -22,6 +22,8 @@
  *  - Single-line If ... Then <statement>  (no End If needed)
  *  - On Error Resume Next  (contains "Next" but is not a For/Next closer)
  *  - Loop While / Loop Until  (contains "Loop" — is a Do/Loop closer, handled)
+ *  - Line-continuation (_) — physical lines joined into logical lines before
+ *    classification so that multi-line If...Then constructs are handled correctly
  *
  * Debounced at 1500 ms so it doesn't fire on every keystroke.
  */
@@ -35,7 +37,7 @@ interface BlockEntry {
     kind:    BlockKind;   // canonical name for matching
     opener:  string;      // display text for error messages  e.g. "If"
     closer:  string;      // expected closer text            e.g. "End If"
-    line:    number;
+    line:    number;      // physical line number (start of the logical line)
     col:     number;
 }
 
@@ -60,7 +62,80 @@ function removeStrings(line: string): string {
     return result;
 }
 
-// ── Classify a single VBScript line ──────────────────────────────────────────
+// ── Line-continuation joining ─────────────────────────────────────────────────
+//
+// Returns true when a physical line ends with a VBScript line-continuation (_).
+// The _ must be preceded by whitespace to distinguish it from an identifier suffix.
+// Also strips trailing VBScript comments before checking (a comment after _ is
+// unusual but technically possible, e.g.  someExpr And _  ' continues here).
+function endsWithContinuation(lineText: string): boolean {
+    // Strip inline comment first
+    const withoutComment = removeStrings(lineText).replace(/'.*$/, '');
+    return /(?:^|\s)_\s*$/.test(withoutComment);
+}
+
+interface LogicalLine {
+    text:         string;   // joined physical lines, continuation markers removed
+    physicalLine: number;   // physical line index where this logical line STARTS
+                            // (used for diagnostic position reporting)
+}
+
+/**
+ * Joins consecutive physical lines that end with _ into single logical lines.
+ * Each resulting LogicalLine carries the physical line number it started on so
+ * that diagnostics still point at the correct source location.
+ *
+ * The trailing ` _` is stripped from each physical line before joining so that
+ * classifyLine sees a clean "If ... Then" rather than "If ... Or _".
+ */
+function joinContinuationLines(lines: string[]): LogicalLine[] {
+    const result: LogicalLine[] = [];
+    let i = 0;
+    while (i < lines.length) {
+        const startLine = i;
+        let joined = '';
+        let inContinuation = false;
+
+        while (i < lines.length) {
+            const raw = lines[i];
+
+            // Blank lines between continuation lines are skipped — they are
+            // just formatting whitespace.  A blank line only terminates the
+            // logical line when we are NOT currently inside a continuation chain
+            // (i.e. the previous non-blank line did not end with _).
+            if (raw.trim() === '') {
+                if (inContinuation) {
+                    i++; // skip blank, stay in chain
+                    continue;
+                } else {
+                    // Blank line with no open chain — emit as-is and advance
+                    result.push({ text: '', physicalLine: i });
+                    i++;
+                    break;
+                }
+            }
+
+            if (endsWithContinuation(raw)) {
+                inContinuation = true;
+                // Strip the trailing whitespace+_ and append with a space separator
+                joined += raw.replace(/\s_\s*$/, ' ');
+                i++;
+            } else {
+                joined += raw;
+                i++;
+                break;
+            }
+        }
+
+        // Only emit if we actually have content (avoids duplicate blank entries)
+        if (joined.trim() !== '' || !inContinuation) {
+            result.push({ text: joined, physicalLine: startLine });
+        }
+    }
+    return result;
+}
+
+// ── Classify a single VBScript logical line ───────────────────────────────────
 //
 // Returns an array of actions to take for this line.  Most lines return [].
 // A line can both close one block and open another (e.g. ElseIf...Then).
@@ -122,7 +197,8 @@ function classifyLine(raw: string): LineAction[] {
         return actions; // single-line If
     }
 
-    // If ... Then (block)
+    // If ... Then (block) — now correctly matches even when If and Then were on
+    // separate physical lines and have been joined by joinContinuationLines
     if (/\bif\b.*\bthen\b/.test(lower)) {
         const col = raw.toLowerCase().indexOf('if');
         actions.push({ type: 'open', kind: 'if', opener: 'If', colOffset: col });
@@ -137,7 +213,6 @@ function classifyLine(raw: string): LineAction[] {
     }
 
     // For Each / For <var> = ...
-    // "For Each" squiggles the two-word phrase; a plain counter For squiggles just "For".
     if (/\bfor\s+each\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bfor\b/);
         actions.push({ type: 'open', kind: 'for', opener: 'For Each', colOffset: col });
@@ -149,11 +224,7 @@ function classifyLine(raw: string): LineAction[] {
         return actions;
     }
 
-    // Do / Do While / Do Until — must come BEFORE the While check so that
-    // "Do While Not rs.EOF" is classified as a Do block (closer: Loop),
-    // not as a While block (closer: Wend).
-    // The opener string includes the condition keyword so the squiggle covers
-    // the full phrase: "Do While", "Do Until", or just "Do".
+    // Do / Do While / Do Until — must come BEFORE the While check
     if (/\bdo\s+while\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bdo\b/);
         actions.push({ type: 'open', kind: 'do', opener: 'Do While', colOffset: col });
@@ -170,37 +241,35 @@ function classifyLine(raw: string): LineAction[] {
         return actions;
     }
 
-    // While ... Wend — guard against:
-    //   "Loop While ..."  (Do/Loop post-condition — already handled as a closer above)
-    //   "Do While ..."    (Do block — already handled above)
+    // While ... Wend
     if (/\bwhile\b/.test(lower) && !/^loop\b/.test(lower) && !/^do\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bwhile\b/);
         actions.push({ type: 'open', kind: 'while', opener: 'While', colOffset: col });
         return actions;
     }
 
-    // Function <name> — guard against "End Function"
+    // Function <n>
     if (/\bfunction\b\s+\w+/.test(lower) && !/^\s*end\s+function\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bfunction\b/);
         actions.push({ type: 'open', kind: 'function', opener: 'Function', colOffset: col });
         return actions;
     }
 
-    // Sub <name> — guard against "End Sub"
+    // Sub <n>
     if (/\bsub\b\s+\w+/.test(lower) && !/^\s*end\s+sub\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bsub\b/);
         actions.push({ type: 'open', kind: 'sub', opener: 'Sub', colOffset: col });
         return actions;
     }
 
-    // With — guard against "End With"
+    // With
     if (/\bwith\b/.test(lower) && !/^\s*end\s+with\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bwith\b/);
         actions.push({ type: 'open', kind: 'with', opener: 'With', colOffset: col });
         return actions;
     }
 
-    // Class <name> — guard against "End Class"
+    // Class <n>
     if (/\bclass\b\s+\w+/.test(lower) && !/^\s*end\s+class\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bclass\b/);
         actions.push({ type: 'open', kind: 'class', opener: 'Class', colOffset: col });
@@ -218,13 +287,23 @@ function scanAspStructure(document: vscode.TextDocument): vscode.Diagnostic[] {
     const diagnostics: vscode.Diagnostic[] = [];
     const stack: BlockEntry[] = [];
 
+    // Collect raw physical line strings
+    const physicalLines: string[] = [];
     for (let li = 0; li < lineCount; li++) {
-        const lineText   = document.lineAt(li).text;
+        physicalLines.push(document.lineAt(li).text);
+    }
+
+    // Join continuation lines into logical lines before classification.
+    // Each logical line records the physical line it started on.
+    const logicalLines = joinContinuationLines(physicalLines);
+
+    for (const logical of logicalLines) {
+        const li       = logical.physicalLine;
+        const lineText = logical.text;
         const lineOffset = document.offsetAt(new vscode.Position(li, 0));
 
         // Only process lines that are (at least partially) inside an ASP block.
-        // Use the midpoint of the line as a quick pre-filter.
-        const midOffset = lineOffset + Math.floor(lineText.length / 2);
+        const midOffset = lineOffset + Math.floor(physicalLines[li].length / 2);
         if (!isInsideAspBlock(text, midOffset)) { continue; }
 
         const trimmed = lineText.trimStart();
@@ -252,7 +331,7 @@ function scanAspStructure(document: vscode.TextDocument): vscode.Diagnostic[] {
 
                 if (matched === -1) {
                     // Stray closer — no matching opener
-                    const col   = lineText.toLowerCase().indexOf(action.closer.toLowerCase());
+                    const col   = physicalLines[li].toLowerCase().indexOf(action.closer.toLowerCase());
                     const start = new vscode.Position(li, Math.max(0, col));
                     const end   = new vscode.Position(li, Math.max(0, col) + action.closer.length);
                     diagnostics.push(Object.assign(

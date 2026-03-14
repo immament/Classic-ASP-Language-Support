@@ -65,6 +65,81 @@ function getIndentUnit(editor: vscode.TextEditor): string {
     return useSpaces ? ' '.repeat(tabSize) : '\t';
 }
 
+// ── Line-continuation helpers ──────────────────────────────────────────────
+
+/**
+ * Returns true when the physical line ends with a VBScript line-continuation
+ * marker (_ preceded by whitespace).  Strips inline comments before checking
+ * so that a comment-only tail like  `someExpr And _  ' note`  still counts.
+ */
+function lineEndsContinuation(lineText: string): boolean {
+    // Remove string literals first, then strip the inline comment tail
+    let stripped = '';
+    let inStr    = false;
+    for (let i = 0; i < lineText.length; i++) {
+        if (lineText[i] === '"') {
+            if (inStr && i + 1 < lineText.length && lineText[i + 1] === '"') { i++; continue; }
+            inStr = !inStr;
+        } else if (!inStr) {
+            if (lineText[i] === "'") { break; }
+            stripped += lineText[i];
+        }
+    }
+    return /(?:^|\s)_\s*$/.test(stripped);
+}
+
+/**
+ * Given a physical line index `physLine`, walks backward to collect the full
+ * logical line that ENDS at `physLine`.
+ *
+ * Returns:
+ *   text      — joined logical text (continuation markers stripped)
+ *   startLine — physical line index where the logical line begins
+ *               (used to read the correct leading whitespace for indent snapping)
+ *
+ * Example — if lines 5, 6, 7 look like:
+ *   5:  If (a And b) Or _
+ *   6:     (c And d) Or _
+ *   7:     (e And f) Then
+ *
+ * getLogicalLineEndingAt(doc, 7) returns:
+ *   { text: "If (a And b) Or    (c And d) Or    (e And f) Then", startLine: 5 }
+ */
+function getLogicalLineEndingAt(
+    document: vscode.TextDocument,
+    physLine: number
+): { text: string; startLine: number } {
+    // Collect the chain by walking backward from physLine - 1 to find the start.
+    // Blank lines between continuation lines are skipped — they are just formatting
+    // whitespace and do not break the chain.  Only a non-blank line that does NOT
+    // end with _ terminates the backward walk.
+    const chainLines: string[] = [document.lineAt(physLine).text];
+    let startLine = physLine;
+
+    for (let i = physLine - 1; i >= 0; i--) {
+        const t = document.lineAt(i).text;
+        if (t.trim() === '') {
+            continue; // blank line — skip, keep walking backward
+        }
+        if (lineEndsContinuation(t)) {
+            chainLines.unshift(t);
+            startLine = i;
+        } else {
+            break;
+        }
+    }
+
+    // Strip the trailing ` _` from all but the last line and join,
+    // filtering out any blank lines that were interspersed in the chain.
+    const nonBlank = chainLines.filter(l => l.trim() !== '');
+    const joined = nonBlank
+        .map((l, idx) => idx < nonBlank.length - 1 ? l.replace(/\s_\s*$/, ' ') : l)
+        .join('')
+        .trim();
+
+    return { text: joined, startLine };
+}
+
 /**
  * Scans upward to find the indent of the opener matching a given closer keyword.
  *
@@ -76,6 +151,11 @@ function getIndentUnit(editor: vscode.TextEditor): string {
  *                                         they are transparent — depth is unchanged.
  *   Foreign blocks                     → tracked independently so nesting of a
  *                                         different block type doesn't confuse the scan.
+ *
+ * Line-continuation awareness: each physical line is first resolved into its full
+ * logical line (via getLogicalLineEndingAt) before being classified.  This means
+ * an If whose condition spans multiple physical lines is correctly recognised as an
+ * opener even when the Then keyword is on the last continuation line.
  */
 function findMatchingOpenerIndent(
     document: vscode.TextDocument,
@@ -106,7 +186,24 @@ function findMatchingOpenerIndent(
     const foreignDepth: number[] = CLOSER_TO_OPENER.map(() => 0);
 
     for (let i = closerLineIndex - 1; i >= 0; i--) {
-        const text = document.lineAt(i).text.trim();
+        // Resolve the full logical line ending at this physical line index.
+        // startLine is the physical line where the logical line begins — used to
+        // read the correct leading whitespace for indent snapping.
+        const { text: logicalText, startLine } = getLogicalLineEndingAt(document, i);
+
+        // Skip physical continuation lines — they were already consumed by
+        // getLogicalLineEndingAt when we processed the last line of the chain.
+        // We detect them by checking if their physical line is NOT the startLine
+        // of the logical line that ends at `i`.  However, since we always call
+        // getLogicalLineEndingAt with the *last* physical line of the chain, and
+        // the loop variable `i` walks backward, we need to jump `i` past the
+        // chain's earlier physical lines after processing.
+        // Adjust `i` so the outer loop skips the lines we already consumed.
+        if (startLine < i) {
+            i = startLine; // loop will do i-- next iteration, landing just before the chain
+        }
+
+        const text = logicalText;
         if (!text) { continue; }
 
         // ── Closer-side check ──────────────────────────────────────────────
@@ -117,7 +214,7 @@ function findMatchingOpenerIndent(
                     if (targetIsMid && targetDepth === 1) {
                         // Another same-type mid-block at depth 1 is our boundary.
                         // It's already at the correct indent — return it as-is, no snapOffset.
-                        const m = document.lineAt(i).text.match(/^(\s*)/);
+                        const m = document.lineAt(startLine).text.match(/^(\s*)/);
                         return m ? m[1] : '';
                     }
                     targetDepth++;
@@ -127,7 +224,7 @@ function findMatchingOpenerIndent(
                     if (targetIsMid && targetDepth === 1) {
                         // Hit a family sibling (e.g. ElseIf hits Else).
                         // Sibling is already at the correct indent — return as-is, no snapOffset.
-                        const m = document.lineAt(i).text.match(/^(\s*)/);
+                        const m = document.lineAt(startLine).text.match(/^(\s*)/);
                         return m ? m[1] : '';
                     }
                     // Pure closer (End If) hits ElseIf/Else/Case → transparent, skip
@@ -146,7 +243,8 @@ function findMatchingOpenerIndent(
             if (!foreignDepth.some(d => d > 0)) {
                 targetDepth--;
                 if (targetDepth === 0) {
-                    const m = document.lineAt(i).text.match(/^(\s*)/);
+                    // Use startLine for indent — that's where the If/For/etc. keyword is
+                    const m = document.lineAt(startLine).text.match(/^(\s*)/);
                     const base = m ? m[1] : '';
                     return base + indentUnit.repeat(snapOffset);
                 }
@@ -267,9 +365,9 @@ const LINE_CONTINUATION_BEFORE_PATTERNS: RegExp[] = [
     // Concatenation operator:  & _   or  + _
     /[&+]\s*$/,
     // Comparison / logical operators:  <> _ , <= _ , >= _ , = _ , And _ , Or _ , Not _
-    /(?:<=|>=|<>|<|>|=|And|Or|Not|Xor|Eqv|Imp)\s*$/i,
+    /(?:<=|>=|<>|<|>|=|And|Or|Not|Xor|Eqv|Imp)\s*$/i,
     // Arithmetic operators:  * _  / _  \ _  Mod _  ^ _  - _
-    /(?:\*|\/|\\|Mod|\^|-)\s*$/i,
+    /(?:\*|\/|\\|Mod|\^|-)\s*$/i,
     // Open paren (argument list continues):  SomeFunc( _
     /\(\s*$/,
     // Comma (argument or array element continues):  arg1, _
@@ -277,7 +375,7 @@ const LINE_CONTINUATION_BEFORE_PATTERNS: RegExp[] = [
     // After a closing paren/bracket (chained call):  ) _   or  ] _
     /[)\]]\s*$/,
     // Keyword that expects a value to follow:  Then _  Else _  Return _  Call _
-    /(?:Then|Else|ElseIf|Return|Call|Set|Let|ReDim|Dim|Private|Public|Const)\s*$/i,
+    /(?:Then|Else|ElseIf|Return|Call|Set|Let|ReDim|Dim|Private|Public|Const)\s*$/i,
 ];
 
 /**
@@ -568,7 +666,6 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
             }
             return;
         }
-
 
         if (isInAspBlock(document, position)) {
 
