@@ -192,17 +192,6 @@
                         ],
                         "description": "VBScript keyword casing style"
                     },
-                    "aspLanguageSupport.useTabs": {
-                        "type": "boolean",
-                        "default": false,
-                        "description": "Use tabs instead of spaces for VBScript indentation"
-                    },
-                    "aspLanguageSupport.indentSize": {
-                        "type": "number",
-                        "default": 2,
-                        "enum": [2, 4, 8],
-                        "description": "Number of spaces per VBScript indentation level"
-                    },
                     "aspLanguageSupport.aspTagsOnSameLine": {
                         "type": "boolean",
                         "default": false,

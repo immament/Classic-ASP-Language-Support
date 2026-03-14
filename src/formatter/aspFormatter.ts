@@ -11,13 +11,16 @@ export interface AspFormatterSettings {
 }
 
 export function getAspSettings(): AspFormatterSettings {
-    const config = vscode.workspace.getConfiguration('aspLanguageSupport');
+    const config         = vscode.workspace.getConfiguration('aspLanguageSupport');
+    const prettierConfig = vscode.workspace.getConfiguration('aspLanguageSupport.prettier');
     return {
-        keywordCase:       config.get<string>('keywordCase',       'PascalCase'),
-        useTabs:           config.get<boolean>('useTabs',          false),
-        indentSize:        config.get<number>('indentSize',        2),
-        aspTagsOnSameLine: config.get<boolean>('aspTagsOnSameLine', false),
-        htmlIndentMode:    config.get<string>('htmlIndentMode',    'flat'),
+        keywordCase:       config.get<string>('keywordCase',             'PascalCase'),
+        // Reuse Prettier's useTabs / tabWidth so VBScript indentation is always
+        // consistent with the HTML/CSS/JS indentation — no duplicate settings.
+        useTabs:           prettierConfig.get<boolean>('useTabs',        false),
+        indentSize:        prettierConfig.get<number>('tabWidth',        2),
+        aspTagsOnSameLine: config.get<boolean>('aspTagsOnSameLine',      false),
+        htmlIndentMode:    config.get<string>('htmlIndentMode',          'flat'),
     };
 }
 
@@ -76,9 +79,17 @@ export function formatSingleAspBlock(
             };
         }
 
-        const aspIndent = getIndentString(levelBefore, settings.useTabs, settings.indentSize);
+        // aspTagsOnSameLine is false — expand to multi-line.
+        // Use htmlIndent so the content is correctly indented relative to its
+        // surrounding HTML (e.g. inside a <td>) rather than always starting at
+        // column 0.  The VBScript content gets one extra indent level on top.
+        const baseLevel   = settings.htmlIndentMode === 'continuation'
+            ? inferLevelFromIndent(htmlIndent, settings.useTabs, settings.indentSize)
+            : 0;
+        const aspIndent   = getIndentString(baseLevel + levelBefore, settings.useTabs, settings.indentSize);
+        const extraIndent = settings.htmlIndentMode === 'continuation' ? htmlIndent : '';
         return {
-            formatted: '<%\n' + aspIndent + formattedContent + '\n%>',
+            formatted: extraIndent + '<%\n' + aspIndent + formattedContent + '\n' + extraIndent + '%>',
             endLevel:  levelAfter,
         };
     }
