@@ -301,6 +301,11 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             trailingComma:             prettierSettings.trailingComma             as any,
             endOfLine:                 prettierSettings.endOfLine                 as any,
             htmlWhitespaceSensitivity: prettierSettings.htmlWhitespaceSensitivity as any,
+            // Prevent Prettier from reformatting JS inside inline event handlers
+            // (onchange="a(); b()") and CSS inside style="".  Without this,
+            // Prettier expands multi-statement handlers onto separate indented
+            // lines when the tag wraps, which is not what we want.
+            embeddedLanguageFormatting: 'off' as any,
         });
     } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
