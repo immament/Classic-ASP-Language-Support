@@ -301,10 +301,6 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             trailingComma:             prettierSettings.trailingComma             as any,
             endOfLine:                 prettierSettings.endOfLine                 as any,
             htmlWhitespaceSensitivity: prettierSettings.htmlWhitespaceSensitivity as any,
-            // Prevent Prettier from reformatting JS inside inline event handlers
-            // (onchange="a(); b()") and CSS inside style="".  Without this,
-            // Prettier expands multi-statement handlers onto separate indented
-            // lines when the tag wraps, which is not what we want.
             embeddedLanguageFormatting: 'off' as any,
         });
     } catch (error) {
@@ -373,13 +369,32 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
 
         switch (block.kind) {
 
-            case 'inline':
-                // Replace the bare token directly — no indent adjustment needed.
-                restoredCode = restoredCode.replace(
-                    `ASPINLINE_${block.id}_END`,
-                    formatted
-                );
+            case 'inline': {
+                const inlineToken  = `ASPINLINE_${block.id}_END`;
+                const escapedToken = inlineToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const isExpression = block.code.trimStart().startsWith('<%=') ||
+                                     block.code.trimStart().startsWith('<% =');
+
+                if (isExpression) {
+                    // <%= ... %> is an inline expression — part of the HTML content.
+                    // Restore it exactly in place without touching any surrounding
+                    // whitespace.  Prettier should not have wrapped it (we pass
+                    // embeddedLanguageFormatting:'off'), but even if it did we keep
+                    // the expression on one line because breaking it would introduce
+                    // unwanted whitespace into the rendered HTML.
+                    restoredCode = restoredCode.replace(inlineToken, formatted);
+                } else {
+                    // <% ... %> is a code block inside an attribute value.
+                    // Prettier may have moved the token onto its own line — strip
+                    // any newline + whitespace it injected before/after the token
+                    // so the result doesn't break the attribute value open.
+                    restoredCode = restoredCode.replace(
+                        new RegExp(`(\\n[ \\t]*)?${escapedToken}([ \\t]*\\n)?`),
+                        () => formatted
+                    );
+                }
                 break;
+            }
 
             case 'midtag':
                 // Prettier may have normalised quotes/spacing around the attribute.
@@ -390,26 +405,65 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
                 break;
 
             default: {
-                // Pick up whatever indentation Prettier assigned to the comment
-                // line, then prepend it to every non-empty line of the formatted
-                // ASP block (the VBScript formatter itself handles internal
-                // indentation relative to that base).
                 const match = restoredCode.match(new RegExp(`([ \\t]*)<!--${escapedId}-->`));
 
                 if (match) {
-                    const htmlIndent    = match[1];
-                    const indentedBlock = formatted
-                        .split('\n')
-                        .map(line => (line.trim() ? htmlIndent + line : line))
-                        .join('\n');
+                    const lineIndent = match[1];
 
-                    restoredCode = restoredCode.replace(
-                        new RegExp(`[ \\t]*<!--${escapedId}-->`),
-                        indentedBlock
-                    );
+                    const placeholderIdx   = restoredCode.indexOf(`<!--${block.id}-->`);
+                    const lineStart        = restoredCode.lastIndexOf('\n', placeholderIdx - 1) + 1;
+                    const textBeforeOnLine = restoredCode.slice(lineStart, placeholderIdx);
+
+                    // A block is "inline placed" when Prettier left non-whitespace
+                    // content before the placeholder on the same line.
+                    // EXCEPTION: if that content contains an unclosed quote the
+                    // placeholder is sitting inside an attribute value
+                    // (e.g. value="<!--ID-->" or onclick="...<!--ID-->...").
+                    // In that case we must restore inline — no newlines inserted —
+                    // because breaking the attribute value open corrupts the HTML.
+                    const hasContentBefore = textBeforeOnLine.trimStart().length > 0;
+                    const isInsideQuote    = hasContentBefore && (() => {
+                        let inQ: string | null = null;
+                        for (const ch of textBeforeOnLine) {
+                            if (!inQ && (ch === '"' || ch === "'")) { inQ = ch; }
+                            else if (inQ && ch === inQ)             { inQ = null; }
+                        }
+                        return inQ !== null; // still inside a quote → unclosed
+                    })();
+                    const isExpression     = block.code.trimStart().startsWith('<%=') ||
+                                             block.code.trimStart().startsWith('<% =');
+                    const isInlinePlaced   = hasContentBefore && !isInsideQuote && !isExpression;
+
+                    if (isInlinePlaced && !aspSettings.aspTagsOnSameLine) {
+                        // Block sits inline in tag text content (e.g. <td><!--ID--></td>).
+                        // Expand it onto its own indented lines.
+                        const indentUnit  = aspSettings.useTabs ? '\t' : ' '.repeat(aspSettings.indentSize);
+                        const baseIndent  = textBeforeOnLine.match(/^([ \t]*)/)?.[1] ?? '';
+                        const blockIndent = baseIndent + indentUnit;
+
+                        const indentedBlock = formatted
+                            .split('\n')
+                            .map(line => (line.trim() ? blockIndent + line : line))
+                            .join('\n');
+
+                        restoredCode = restoredCode.replace(
+                            new RegExp(`[ \\t]*<!--${escapedId}-->`),
+                            `\n${indentedBlock}\n${baseIndent}`
+                        );
+                    } else {
+                        // Block is either standalone on its own line, or inside a
+                        // quoted attribute value — restore in-place with line indent.
+                        const indentedBlock = formatted
+                            .split('\n')
+                            .map(line => (line.trim() ? lineIndent + line : line))
+                            .join('\n');
+
+                        restoredCode = restoredCode.replace(
+                            new RegExp(`[ \\t]*<!--${escapedId}-->`),
+                            indentedBlock
+                        );
+                    }
                 } else {
-                    // Safety fallback — the placeholder-lost check above should
-                    // have already caught real deletions, but guard anyway.
                     restoredCode = restoredCode.replace(`<!--${block.id}-->`, formatted);
                 }
                 break;
