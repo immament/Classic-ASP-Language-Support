@@ -311,7 +311,13 @@ function scanAspStructure(document: vscode.TextDocument): vscode.Diagnostic[] {
         // Skip VBScript comment lines and REM lines
         if (trimmed.startsWith("'") || /^rem\s/i.test(trimmed)) { continue; }
 
-        const actions = classifyLine(lineText);
+        // Strip inline ASP delimiters so that compact forms like <%End If%>,
+        // <%If x Then%>, <%Else%> are classified correctly.
+        // classifyLine anchors some patterns at ^ (e.g. /^end\s+if/) so the
+        // leading <% must be removed before classification.
+        const classifyText = lineText.replace(/^\s*<%=?\s*/i, '').replace(/\s*%>\s*$/i, '');
+
+        const actions = classifyLine(classifyText);
 
         for (const action of actions) {
             if (action.type === 'open') {
