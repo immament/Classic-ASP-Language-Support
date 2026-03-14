@@ -48,9 +48,12 @@ const CLOSER_TO_OPENER: { closer: RegExp; opener: RegExp; isMidBlock?: boolean; 
  * Returns true when `position` is inside a <% ... %> ASP block.
  * Delegates to the canonical comment-aware isInsideAspBlock from documentHelper
  * so that %> inside VBScript comment lines (') is never treated as a close tag.
+ *
+ * Accepts an optional pre-fetched `docText` so callers that already hold the
+ * full document string avoid allocating it a second time.
  */
-function isInAspBlock(document: vscode.TextDocument, position: vscode.Position): boolean {
-    const text   = document.getText();
+function isInAspBlock(document: vscode.TextDocument, position: vscode.Position, docText?: string): boolean {
+    const text   = docText ?? document.getText();
     const offset = document.offsetAt(position);
     return isInsideAspBlock(text, offset);
 }
@@ -73,19 +76,31 @@ function getIndentUnit(editor: vscode.TextEditor): string {
  * so that a comment-only tail like  `someExpr And _  ' note`  still counts.
  */
 function lineEndsContinuation(lineText: string): boolean {
-    // Remove string literals first, then strip the inline comment tail
-    let stripped = '';
-    let inStr    = false;
+    // Fast exit: if the line doesn't end with whitespace+_ at all, bail immediately.
+    // This is true for the vast majority of lines and avoids the character loop entirely.
+    if (!/\s_\s*$/.test(lineText)) { return false; }
+
+    // The line LOOKS like it ends with _ — now verify the _ is not inside a string
+    // literal or after a VBScript comment marker (').
+    let inStr = false;
+    let lastUnderscoreOutside = -1;
     for (let i = 0; i < lineText.length; i++) {
-        if (lineText[i] === '"') {
-            if (inStr && i + 1 < lineText.length && lineText[i + 1] === '"') { i++; continue; }
-            inStr = !inStr;
-        } else if (!inStr) {
-            if (lineText[i] === "'") { break; }
-            stripped += lineText[i];
+        const ch = lineText[i];
+        if (inStr) {
+            if (ch === '"') {
+                if (i + 1 < lineText.length && lineText[i + 1] === '"') { i++; continue; }
+                inStr = false;
+            }
+            continue;
         }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === "'") { break; } // rest of line is comment — stop here
+        if (ch === '_') { lastUnderscoreOutside = i; }
     }
-    return /(?:^|\s)_\s*$/.test(stripped);
+
+    if (lastUnderscoreOutside === -1) { return false; }
+    // The _ must be preceded by whitespace (not part of an identifier)
+    return lastUnderscoreOutside > 0 && /\s/.test(lineText[lastUnderscoreOutside - 1]);
 }
 
 /**
@@ -186,24 +201,32 @@ function findMatchingOpenerIndent(
     const foreignDepth: number[] = CLOSER_TO_OPENER.map(() => 0);
 
     for (let i = closerLineIndex - 1; i >= 0; i--) {
-        // Resolve the full logical line ending at this physical line index.
-        // startLine is the physical line where the logical line begins — used to
-        // read the correct leading whitespace for indent snapping.
-        const { text: logicalText, startLine } = getLogicalLineEndingAt(document, i);
+        const rawLine = document.lineAt(i).text;
+        let text: string;
+        let startLine: number;
 
-        // Skip physical continuation lines — they were already consumed by
-        // getLogicalLineEndingAt when we processed the last line of the chain.
-        // We detect them by checking if their physical line is NOT the startLine
-        // of the logical line that ends at `i`.  However, since we always call
-        // getLogicalLineEndingAt with the *last* physical line of the chain, and
-        // the loop variable `i` walks backward, we need to jump `i` past the
-        // chain's earlier physical lines after processing.
-        // Adjust `i` so the outer loop skips the lines we already consumed.
-        if (startLine < i) {
-            i = startLine; // loop will do i-- next iteration, landing just before the chain
+        // Check whether this line is part of a continuation chain.
+        // A line is part of a chain if it ITSELF ends with _ (it's a mid/opener line),
+        // OR if the line immediately above it ends with _ (it's the tail of a chain).
+        // Both cases need getLogicalLineEndingAt to join the physical lines correctly.
+        const prevLineEnds = i > 0 && lineEndsContinuation(document.lineAt(i - 1).text);
+
+        if (lineEndsContinuation(rawLine) || prevLineEnds) {
+            // Part of a continuation chain — resolve the full logical line.
+            const resolved = getLogicalLineEndingAt(document, i);
+            text      = resolved.text;
+            startLine = resolved.startLine;
+            // Jump i past the earlier physical lines of this chain so the outer
+            // loop doesn't re-process them.
+            if (resolved.startLine < i) {
+                i = resolved.startLine;
+            }
+        } else {
+            // Fast path — plain line with no continuation involved.
+            text      = rawLine.trim();
+            startLine = i;
         }
 
-        const text = logicalText;
         if (!text) { continue; }
 
         // ── Closer-side check ──────────────────────────────────────────────
@@ -578,7 +601,13 @@ export function registerAutoClosingTag(context: vscode.ExtensionContext) {
         }
 
         if (!VBSCRIPT_EXACT_CLOSER.test(currentTrimmed)) { return; }
-        if (!isInAspBlock(event.document, new vscode.Position(changePos.line, currentLine.text.length))) { return; }
+
+        // getText() is called once here and passed into isInAspBlock so there is
+        // only one full-document string allocation per snap event.  This only runs
+        // when the line already matches VBSCRIPT_EXACT_CLOSER, so ordinary keystrokes
+        // never reach this point.
+        const docText = event.document.getText();
+        if (!isInAspBlock(event.document, new vscode.Position(changePos.line, currentLine.text.length), docText)) { return; }
 
         const openerIndent = findMatchingOpenerIndent(event.document, changePos.line, currentTrimmed, snapIndentUnit);
         if (openerIndent === null || openerIndent === currentIndent) { return; }
@@ -611,6 +640,7 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
 
         const position        = editor.selection.active;
         const document        = editor.document;
+        const docText         = document.getText();
         const line            = document.lineAt(position.line);
         const textBefore      = line.text.substring(0, position.character);
         const textAfter       = line.text.substring(position.character);
@@ -667,7 +697,7 @@ export function registerEnterKeyHandler(context: vscode.ExtensionContext) {
             return;
         }
 
-        if (isInAspBlock(document, position)) {
+        if (isInAspBlock(document, position, docText)) {
 
             // After <% or <%= on its own line: VBScript code sits at the same indent
             // as <% itself — no extra level added. <% is at HTML child level and
@@ -915,13 +945,17 @@ export function registerTabKeyHandler(context: vscode.ExtensionContext) {
             return vscode.commands.executeCommand('tab');
         }
 
-        const position = editor.selection.active;
-        const lineText = editor.document.lineAt(position.line).text;
+        const position  = editor.selection.active;
+        const lineText  = editor.document.lineAt(position.line).text;
 
         // Only apply smart indent on a completely blank line
         if (lineText.trim() !== '') {
             return vscode.commands.executeCommand('tab');
         }
+
+        // Fetch document text once — only reached on blank lines where smart
+        // indent actually runs, so this allocation is never wasted on normal tabs.
+        const docText   = editor.document.getText();
 
         const indentUnit = getIndentUnit(editor);
 
@@ -938,7 +972,7 @@ export function registerTabKeyHandler(context: vscode.ExtensionContext) {
         }
 
         const currentIndent = lineText.match(/^(\s*)/)?.[1] ?? '';
-        const inAsp = isInAspBlock(editor.document, position);
+        const inAsp = isInAspBlock(editor.document, position, docText);
 
         let targetIndent: string;
         if (prevLineText === '%>') {
