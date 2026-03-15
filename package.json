@@ -233,7 +233,7 @@
                     },
                     "aspLanguageSupport.prettier.bracketSameLine": {
                         "type": "boolean",
-                        "default": true,
+                        "default": false,
                         "description": "Put the closing > of a multi-line HTML element on the last attribute line — Prettier bracketSameLine"
                     },
                     "aspLanguageSupport.prettier.semi": {
