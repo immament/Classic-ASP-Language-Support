@@ -141,49 +141,83 @@ function hasUnclosedAspTags(code: string): boolean {
  * between unquoted attributes (midtag), or free-standing (normal).
  */
 function classifyOffset(code: string, offset: number): AspBlockKind {
-    let inQuote: string | null = null;
+    // Strategy: scan backwards to find the nearest enclosing HTML attribute quote.
+    //
+    // HTML attributes use double-quotes `"`, while JS strings inside them use
+    // single-quotes `'`.  When scanning backwards, any quote character (`"` or `'`)
+    // that is immediately preceded by `=` (ignoring whitespace) is an HTML
+    // attribute opening quote — meaning our ASP block is inside that attribute
+    // value, so it is 'inline'.
+    //
+    // All other quotes are JS-string boundaries inside the attribute value.
+    // We track them with a stack so we correctly skip their contents.
+    //
+    // Example (after Prettier wraps across lines):
+    //   onclick="
+    //       someFunc(
+    //           '<%= val %>',   ← scanning backwards from here
+    //       )
+    //   "
+    // Backwards path: ' (JS string close, push "'") → newline, spaces → " (not
+    // matching top of stack which is "'", but preceded by "=" → return 'inline').
+
     let i = offset - 1;
+
+    // Stack of quote chars for JS strings. Top = the innermost open JS string.
+    const quoteStack: string[] = [];
 
     while (i >= 0) {
         const ch = code[i];
 
-        if (inQuote) {
-            if (ch === inQuote) inQuote = null;
-            i--; continue;
-        }
-
+        // ── Check every quote for the HTML attribute open-quote pattern ──────
+        // Regardless of nesting level, if a quote char is preceded by `=` it is
+        // an HTML attribute boundary that encloses the ASP block.
         if (ch === '"' || ch === "'") {
-            inQuote = ch; // hit closing quote while scanning backwards
+            let j = i - 1;
+            while (j >= 0 && (code[j] === ' ' || code[j] === '\t' || code[j] === '\n' || code[j] === '\r')) {
+                j--;
+            }
+            if (j >= 0 && code[j] === '=') {
+                // HTML attribute opening quote — the ASP block lives inside this value.
+                return 'inline';
+            }
+
+            // Not an attribute open-quote. Treat as JS string boundary.
+            if (quoteStack.length > 0 && quoteStack[quoteStack.length - 1] === ch) {
+                // Matches the innermost open string — this is its opening quote, pop.
+                quoteStack.pop();
+            } else {
+                // Closing quote of a JS string we haven't entered yet — push.
+                quoteStack.push(ch);
+            }
             i--; continue;
         }
 
-        if (ch === '>') {
-            // If this > is part of a %> closing tag, it is NOT a real HTML tag
-            // boundary — skip backwards past the entire <% ... %> block and keep
-            // scanning. Without this guard, a pattern like:
-            //   <option <% If x Then %>selected<% End If %>>
-            // would make the second <% (End If) see the %> from the first block
-            // and incorrectly return 'normal', causing an HTML comment placeholder
-            // to be injected mid-tag and breaking Prettier.
-            if (i > 0 && code[i - 1] === '%') {
-                i -= 2; // step past %>
-                while (i >= 0) {
-                    if (code[i] === '<' && i + 1 < code.length && code[i + 1] === '%') {
-                        i--; // step past <%, continue outer loop
-                        break;
+        // ── Tag boundary characters (only relevant at top-level) ────────────
+        // If we're nested inside a JS string, angle brackets are just content.
+        if (quoteStack.length === 0) {
+            if (ch === '>') {
+                // If this > is part of a %> closing tag, skip the whole <% %> block.
+                if (i > 0 && code[i - 1] === '%') {
+                    i -= 2;
+                    while (i >= 0) {
+                        if (code[i] === '<' && i + 1 < code.length && code[i + 1] === '%') {
+                            i--;
+                            break;
+                        }
+                        i--;
                     }
-                    i--;
+                    continue;
                 }
-                continue;
+                return 'normal';
             }
-            return 'normal'; // real HTML tag close — we are between tags
-        }
 
-        if (ch === '<') {
-            const after = code.substring(i + 1, i + 3);
-            if (after.startsWith('/'))        return 'normal';  // closing tag
-            if (/^[a-zA-Z!?]/.test(after))   return 'midtag';  // opening/void tag
-            return 'normal';
+            if (ch === '<') {
+                const after = code.substring(i + 1, i + 3);
+                if (after.startsWith('/'))        return 'normal';
+                if (/^[a-zA-Z!?]/.test(after))   return 'midtag';
+                return 'normal';
+            }
         }
 
         i--;
@@ -247,9 +281,17 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             let end = pos + 2;
             while (end < code.length) {
                 if (code[end] === '%' && code[end + 1] === '>') {
-                    // Check whether this %> is on a VBScript comment line
-                    const lineBegin = code.lastIndexOf('\n', end - 1) + 1;
-                    const lineUpToClose = code.slice(lineBegin, end).trimStart();
+                    // Check whether this %> is on a VBScript comment line.
+                    // A VBScript comment starts with ' as the first non-whitespace
+                    // character INSIDE the ASP block — not just anywhere on the
+                    // HTML line.  We scan from the later of: the start of the
+                    // current line, or the opening <% tag itself, so that a JS
+                    // single-quote that precedes the ASP block on the same line
+                    // (e.g.  '<%= cmpy %>'  ) cannot trip the comment check.
+                    const lineBegin      = code.lastIndexOf('\n', end - 1) + 1;
+                    const aspContentStart = pos + 2; // first char after <%
+                    const scanFrom       = Math.max(lineBegin, aspContentStart);
+                    const lineUpToClose  = code.slice(scanFrom, end).trimStart();
                     if (!lineUpToClose.startsWith("'")) {
                         end += 2; // include the %>
                         break;
@@ -305,10 +347,26 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
     } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         const lineMatch = msg.match(/\((\d+):(\d+)\)/);
-        const location  = lineMatch ? ` (line ${lineMatch[1]})` : '';
+        const location  = lineMatch ? ` (line ${lineMatch[1]}, col ${lineMatch[2]})` : '';
+
+        // ── Debug: log the masked code so we can see what Prettier choked on ──
+        const channel = vscode.window.createOutputChannel('ASP Formatter Debug');
+        channel.clear();
+        channel.appendLine('=== Prettier parse error' + location + ' ===');
+        channel.appendLine('Error: ' + msg);
+        channel.appendLine('');
+        channel.appendLine('=== Masked code sent to Prettier ===');
+        channel.appendLine(maskedCode);
+        channel.appendLine('');
+        channel.appendLine('=== ASP blocks classified ===');
+        for (const b of aspBlocks) {
+            channel.appendLine(`  line ${b.lineNumber + 1}  kind=${b.kind}  ${b.code.slice(0, 60).replace(/\n/g, '\\n')}`);
+        }
+        channel.show(true);
+
         vscode.window.showWarningMessage(
             `Formatting skipped — Prettier could not parse the HTML${location}. ` +
-            `This is usually caused by a missing or extra HTML tag. Fix the highlighted warnings first.`
+            `Check the "ASP Formatter Debug" output channel to see the masked code.`
         );
         return code;
     }
