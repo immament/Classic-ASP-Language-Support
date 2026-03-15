@@ -392,14 +392,18 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
     // Process blocks sequentially so each normal block can thread its ending
     // indent level into the next, enabling cross-block continuity.
 
-    const formattedBlocks: string[] = [];
-    let   currentIndentLevel        = 0;
+    const formattedBlocks:  string[] = [];
+    const blockStartLevels: number[] = [];
+    const blockHtmlIndents: string[] = [];
+    let   currentIndentLevel         = 0;
 
     for (const block of aspBlocks) {
         if (block.kind !== 'normal') {
             // Inline / midtag blocks: format but don't change the tracked level.
             const result = formatSingleAspBlock(block.code, aspSettings, '', currentIndentLevel);
             formattedBlocks.push(result.formatted);
+            blockStartLevels.push(-1);
+            blockHtmlIndents.push('');
             continue;
         }
 
@@ -410,9 +414,34 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
         const indentMatch = prettifiedCode.match(new RegExp(`([ \\t]*)<!--${escapedId}-->`));
         const htmlIndent  = indentMatch ? indentMatch[1] : '';
 
+        blockStartLevels.push(currentIndentLevel);
+        blockHtmlIndents.push(htmlIndent);
+
         const result = formatSingleAspBlock(block.code, aspSettings, htmlIndent, currentIndentLevel);
         formattedBlocks.push(result.formatted);
         currentIndentLevel = result.endLevel;
+    }
+
+    // ── Step 4b: Compute the shared tag-column for each linked group ─────────
+    // In 'flat' mode, consecutive normal blocks that are part of the same
+    // VBScript flow (startLevel > 0 for all but the first) share one logical
+    // script.  Their <% / %> delimiters should all sit at the same column —
+    // the HTML indent of the shallowest (first) block in the group — so the
+    // tags form a consistent left margin regardless of HTML nesting depth.
+    // A new group starts whenever a normal block has startLevel === 0.
+
+    const blockTagIndents: string[] = new Array(aspBlocks.length).fill('');
+
+    if (aspSettings.htmlIndentMode !== 'continuation') {
+        let groupTagIndent = '';
+        for (let i = 0; i < aspBlocks.length; i++) {
+            if (aspBlocks[i].kind !== 'normal') continue;
+            if (blockStartLevels[i] === 0) {
+                // New group — this block's HTML indent becomes the shared tag column.
+                groupTagIndent = blockHtmlIndents[i];
+            }
+            blockTagIndents[i] = groupTagIndent;
+        }
     }
 
     // ── Step 5: Restore formatted ASP blocks into Prettier's output ─────────
@@ -498,9 +527,22 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
                         const baseIndent  = textBeforeOnLine.match(/^([ \t]*)/)?.[1] ?? '';
                         const blockIndent = baseIndent + indentUnit;
 
+                        // In flat mode use the group's shared tag column so this block's
+                        // tags align with all sibling blocks in the same VBScript group.
+                        const inlineTagIndent = aspSettings.htmlIndentMode === 'continuation'
+                            ? ''
+                            : blockTagIndents[i];
+
                         const indentedBlock = formatted
                             .split('\n')
-                            .map(line => (line.trim() ? blockIndent + line : line))
+                            .map(line => {
+                                if (!line.trim()) return line;
+                                const t = line.trim();
+                                if (t === '<%' || t === '%>') return inlineTagIndent + t;
+                                return aspSettings.htmlIndentMode === 'continuation'
+                                    ? line
+                                    : blockTagIndents[i] + line;
+                            })
                             .join('\n');
 
                         restoredCode = restoredCode.replace(
@@ -509,10 +551,41 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
                         );
                     } else {
                         // Block is either standalone on its own line, or inside a
-                        // quoted attribute value — restore in-place with line indent.
+                        // quoted attribute value — restore with correct tag indentation.
+                        //
+                        // How <% and %> tag lines are indented depends on htmlIndentMode:
+                        //
+                        // 'flat' mode  — aspFormatter starts VBScript at level 0, so
+                        //   content lines have only VBScript indent (e.g. "    If ...").
+                        //   The <% / %> tags should sit at the HTML placeholder indent
+                        //   (lineIndent) so they visually belong to the HTML structure,
+                        //   and content is indented further in from there.
+                        //   e.g.  <div>\n  <% ← lineIndent, content at lineIndent+vbsIndent
+                        //
+                        // 'continuation' mode — aspFormatter already adds HTML depth to
+                        //   content indent, so content is fully self-contained.
+                        //   The <% / %> tags go to column 0 to avoid double-indenting.
+                        //   e.g.  <%\n        If ... (HTML+VBScript indent already baked in)
+                        // 'flat' mode: use the group's shared tag column (the HTML indent
+                        // of the first/shallowest block in this VBScript group) so all
+                        // <% / %> tags in the group align at the same column.
+                        const tagIndent = aspSettings.htmlIndentMode === 'continuation'
+                            ? ''                   // tags at col 0; content has full indent
+                            : blockTagIndents[i];  // shared group column
+
                         const indentedBlock = formatted
                             .split('\n')
-                            .map(line => (line.trim() ? lineIndent + line : line))
+                            .map(line => {
+                                if (!line.trim()) return line;
+                                const t = line.trim();
+                                if (t === '<%' || t === '%>') return tagIndent + t;
+                                // Content lines: in flat mode add the group tag indent on
+                                // top of the VBScript indent aspFormatter produced.
+                                // In continuation mode keep as-is (full indent baked in).
+                                return aspSettings.htmlIndentMode === 'continuation'
+                                    ? line
+                                    : blockTagIndents[i] + line;
+                            })
                             .join('\n');
 
                         restoredCode = restoredCode.replace(
