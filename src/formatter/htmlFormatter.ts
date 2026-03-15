@@ -301,7 +301,6 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             trailingComma:             prettierSettings.trailingComma             as any,
             endOfLine:                 prettierSettings.endOfLine                 as any,
             htmlWhitespaceSensitivity: prettierSettings.htmlWhitespaceSensitivity as any,
-            embeddedLanguageFormatting: 'off' as any,
         });
     } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
@@ -470,6 +469,32 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             }
         }
     }
+
+    // ── Step 6: Fix broken whitespace-sensitive tags (e.g. <textarea>) ───────
+    // When ASPINLINE tokens are long, Prettier wraps the closing `>` of the
+    // opening tag onto its own line, and separately breaks the closing tag:
+    //
+    //   <textarea ...attrs...>
+    //   <%= val %></textarea
+    //                       >
+    //
+    // This is invalid for whitespace-sensitive tags because any whitespace
+    // between `>` and the content becomes part of the rendered text.
+    // Collapse both splits so the result is:
+    //
+    //   <textarea ...attrs...><%= val %></textarea>
+    //
+    // Pattern:
+    //   (>)           — the closing > of the opening tag (already on its own line or inline)
+    //   \n[ \t]*      — newline + any indentation Prettier added before the content
+    //   ([^\n]+?)     — the inline content (single line, non-greedy)
+    //   (<\/\w+)      — start of the closing tag (e.g. </textarea)
+    //   \n[ \t]*      — newline + whitespace before the stray >
+    //   (>)           — the stray > that closes the closing tag
+    restoredCode = restoredCode.replace(
+        /(>)\n[ \t]*([^\n]+?)(<\/\w+)\n[ \t]*(>)/g,
+        '$1$2$3$4'
+    );
 
     return restoredCode;
 }
