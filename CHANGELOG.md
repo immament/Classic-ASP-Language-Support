@@ -5,6 +5,31 @@ All notable changes to the "Classic ASP Language Support" extension will be docu
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-03-16
+
+### ✨ Added
+- **Formatter notifications** - Toast notifications now appear when formatting succeeds or fails
+- **Tag validation warnings** - Orange squiggles warn about missing or extra closing tags in HTML and VBScript ([#46](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/46))
+
+### 🛠️ Fixed
+- **Fixed #40** - Single-line `If` statements no longer add extra indentation on the next line ([#40](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/40))
+- **Fixed #41** - False SQL injection warnings no longer triggered on non-SQL variables ([#41](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/41))
+- **Fixed #42** - VBScript `Dim` and `Const` variables no longer incorrectly coloured as JavaScript parameters ([#42](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/42))
+- **Fixed #43** - Subquery aliases now colour correctly after closing parentheses in JOINs ([#43](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/43))
+- **Fixed #44** - SQL syntax highlighting now works correctly with tab-indented code ([#44](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/44))
+- **Fixed #45** - SQL keywords no longer incorrectly applied to plain string values containing SQL-like words ([#45](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/45))
+- **Fixed #47** - Multiple consecutive blank lines now collapse to a single blank line after formatting ([#47](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/47))
+- **Fixed #48** - VBScript `Dim` variables now colour correctly inside `<%= %>` within HTML attributes ([#48](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/48))
+- **Fixed #49** - Column names in bracket notation now colour correctly with table name brackets ([#49](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/49))
+- **Fixed #50** - HTML comment auto-closing no longer incorrectly triggers inside VBScript `<% %>` blocks ([#50](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/50))
+- **Fixed #51** - Resolved severe lag on large files caused by SQL warning checks and semantic token colouring ([#51](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/51))
+- **Improved formatter stability** - Significantly improved with better error handling and edge case fixes
+
+### 🔄 Changed
+- **Unified indentation settings** - Removed `aspLanguageSupport.indentSize` and `aspLanguageSupport.useTabs` in favour of Prettier's settings for consistency
+
+---
+
 ## [0.3.5] - 2026-03-08
 
 ### ✨ Added
@@ -212,6 +237,7 @@ First public release focused on Classic ASP code formatting.
 
 ---
 
+[0.3.6]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.6
 [0.3.5]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.5
 [0.3.4]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.4
 [0.3.3]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.3
