@@ -197,7 +197,7 @@ type SqlTokType = 'bracket' | 'word' | 'dot' | 'num' | 'comma' | 'paren' | 'ws' 
 interface SqlTok { type: SqlTokType; val: string; off: number; }
 
 // Sticky regexes — set .lastIndex = i before each exec() to avoid slice().
-const RE_WORD  = /[a-zA-Z_#][a-zA-Z0-9_#]*/y;
+const RE_WORD  = /[a-zA-Z_#$][a-zA-Z0-9_#$]*/y;
 const RE_NUM   = /\d+(\.\d+)?([eE][+-]?\d+)?/y;
 const RE_WS    = /\s+/y;
 
