@@ -550,6 +550,16 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
                             `\n${indentedBlock}\n${baseIndent}`
                         );
                     } else {
+                        // Expression sitting inline in tag text content (e.g. <td><%= val %></td>)
+                        // — restore it exactly as-is with no indentation applied.
+                        if (isExpression && hasContentBefore && !isInsideQuote) {
+                            restoredCode = restoredCode.replace(
+                                new RegExp(`[ \\t]*<!--${escapedId}-->`),
+                                formatted.trim()
+                            );
+                            break;
+                        }
+
                         // Block is either standalone on its own line, or inside a
                         // quoted attribute value — restore with correct tag indentation.
                         //
