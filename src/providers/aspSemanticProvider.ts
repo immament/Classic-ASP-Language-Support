@@ -6,7 +6,7 @@ import {
     ASP_SEMANTIC_LEGEND,
     T_FUNCTION, T_NAMESPACE, T_VARIABLE, T_PARAMETER, T_CONSTANT,
     M_DECLARATION, M_READONLY,
-    isSql, ALL_SQL_KEYWORDS,
+    isSql, isSqlExpression, ALL_SQL_KEYWORDS,
     SqlStringGroup, SqlStringSegment, extractSqlGroup, emitSqlTokensForGroup,
 } from './sqlSemanticProvider';
 export { ASP_SEMANTIC_LEGEND } from './sqlSemanticProvider';
@@ -231,6 +231,81 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             }
         }
 
+        // ── Sub-pass 2b: SQL expression fragment promotion ───────────────────────
+        // Variables like anpQRAssort = "LTRIM(RTRIM(SUBSTRING(...)))" hold pure
+        // SQL expressions that get embedded into confirmed SQL variables via gaps:
+        //   anpSub = "(SELECT " & anpQRAssort & " AS Assortment, " & _
+        //            anpQRMix & ...
+        // anpQRAssort appears on a CONTINUATION line with no '=', so a simple
+        // per-line assignPattern check misses it entirely.
+        //
+        // Fix: scan continuation groups as a unit. When a line opens a SQL var
+        // assignment, walk ALL its continuation lines and check their non-string
+        // gaps for candidate variables.
+        const sqlExprPromoted = new Set<string>(); // vars promoted via SQL expression fragment detection
+        {
+            // Step A: collect candidates whose stitched value is a SQL expression.
+            const sqlExprCandidates = new Set<string>();
+            for (const [varName, assignments] of assignmentMap) {
+                if (sqlVars.has(varName)) { continue; }
+                for (const a of assignments) {
+                    if (!a.isSelfAppend && isSqlExpression(a.stitchedValue)) {
+                        sqlExprCandidates.add(varName);
+                        break;
+                    }
+                }
+            }
+
+            if (sqlExprCandidates.size > 0) {
+                const candidatePattern = new RegExp(
+                    '\\b(' + [...sqlExprCandidates]
+                        .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                        .join('|') + ')\\b',
+                    'gi'
+                );
+
+                // Step B: walk every line. When we find an assignment into a sqlVar,
+                // follow the full continuation group and check ALL gap text for candidates.
+                let li = 0;
+                while (li < lineCount) {
+                    const lineText   = lineTextCache[li];
+                    const lineOffset = lineOffsetCache[li];
+                    if (!inAsp(lineOffset + Math.floor(lineText.length / 2))) { li++; continue; }
+
+                    const stripped = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+                    const cpIdx    = stripped.indexOf("'");
+                    const active   = cpIdx !== -1 ? stripped.substring(0, cpIdx) : stripped;
+
+                    const am = assignPattern.exec(active);
+                    if (!am || !sqlVars.has(am[1].toLowerCase())) { li++; continue; }
+
+                    // Found a SQL var assignment — scan this line and all its continuations.
+                    let scanLi = li;
+                    while (scanLi < lineCount) {
+                        const scanText    = lineTextCache[scanLi];
+                        const scanStripped = scanText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+                        const scanCp       = scanStripped.indexOf("'");
+                        const scanActive   = scanCp !== -1 ? scanStripped.substring(0, scanCp) : scanStripped;
+
+                        candidatePattern.lastIndex = 0;
+                        let m2: RegExpExecArray | null;
+                        while ((m2 = candidatePattern.exec(scanActive)) !== null) {
+                            sqlVars.add(m2[1].toLowerCase());
+                            sqlExprPromoted.add(m2[1].toLowerCase());
+                        }
+
+                        // Continue only if this line ends with & _ (line continuation)
+                        const trimmedEnd = scanActive.trimEnd();
+                        if (!trimmedEnd.endsWith('_')) { break; }
+                        const beforeUnderscore = trimmedEnd.slice(0, -1).trimEnd();
+                        if (!beforeUnderscore.endsWith('&') && !beforeUnderscore.endsWith('=')) { break; }
+                        scanLi++;
+                    }
+                    li = scanLi + 1;
+                }
+            }
+        }
+
         // ── Sub-pass 3: SQL function return analysis ──────────────────────────
         // For every Function defined in this document, scan its body for the
         // VBScript return-value pattern:  FunctionName = <expr>
@@ -337,8 +412,13 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             const selfRefRe  = new RegExp('^\\b' + escapedV3 + '\\b', 'i');
             const varNameRe  = new RegExp('\\b' + escapedV3 + '\\b', 'i');
 
+            // Skip variables promoted via SQL expression fragment — their assignments
+            // are intentionally SQL expressions (SUBSTRING, CHARINDEX, etc.) that don't
+            // pass isSql(), so the "non-SQL assignment" warning is a false positive.
+            if (sqlExprPromoted.has(varName3)) { continue; }
+
             for (const a of assignments) {
-                if (a.isSelfAppend || isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue)) { continue; }
+                if (a.isSelfAppend || isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue) || isSqlExpression(a.stitchedValue)) { continue; }
 
                 for (let li = 0; li < lineCount; li++) {
                     const lineText   = lineTextCache[li];

@@ -97,6 +97,24 @@ export function isSql(text: string): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SQL expression fragment detection — for strings that are pure SQL expressions
+// (SUBSTRING, CHARINDEX, CAST, etc.) with no SELECT/FROM verb.
+// Used to detect variables like anpQRAssort = "LTRIM(RTRIM(SUBSTRING(...)))"
+// that get embedded as fragments into a larger SQL string.
+// ─────────────────────────────────────────────────────────────────────────────
+const SQL_EXPR_FUNCTIONS = /\b(SUBSTRING|CHARINDEX|PATINDEX|LEN|LTRIM|RTRIM|TRIM|UPPER|LOWER|REPLACE|STUFF|LEFT|RIGHT|REVERSE|CAST|CONVERT|ISNULL|COALESCE|NULLIF|IIF|CHOOSE|DATEADD|DATEDIFF|DATEPART|DATENAME|GETDATE|GETUTCDATE|FORMAT|TRY_CAST|TRY_CONVERT|COUNT|SUM|AVG|MAX|MIN|ROW_NUMBER|RANK|DENSE_RANK|ABS|CEILING|FLOOR|ROUND|POWER|SQRT|YEAR|MONTH|DAY|HOUR|MINUTE|SECOND)\s*\(/i;
+
+// Returns true for strings that are SQL expressions (function calls) even
+// without a SELECT/FROM verb — e.g. "LTRIM(RTRIM(SUBSTRING(QRCode, ...)))"
+export function isSqlExpression(text: string): boolean {
+    // Must start with a SQL function call (possibly with leading whitespace)
+    if (!SQL_EXPR_FUNCTIONS.test(text)) { return false; }
+    // Must not look like a natural language sentence (has a period before any keyword)
+    if (/(?<![\w\]])\.|\.(?![\w\[])/.test(text.split('(')[0])) { return false; }
+    return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SQL keyword sets — mirrors tmLanguage sql-syntax scopes for consistent colours.
 // ─────────────────────────────────────────────────────────────────────────────
 const SQL_DML_WORDS = new Set([
