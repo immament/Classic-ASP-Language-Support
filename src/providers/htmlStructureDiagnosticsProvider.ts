@@ -30,6 +30,13 @@ const STRUCTURAL_TAGS = new Set([
     'article', 'aside', 'header', 'footer', 'main', 'dialog',
 ]);
 
+const VOID_ELEMENTS = new Set([
+    'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+    'link', 'meta', 'param', 'source', 'track', 'wbr',
+]);
+
+export const VOID_ELEMENT_DIAGNOSTIC_CODE = 'voidElementClosingTag';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TagEntry {
@@ -132,6 +139,22 @@ function scanHtmlStructure(document: vscode.TextDocument): vscode.Diagnostic[] {
         if (!isClose && tagName === 'script') { inScript = true; i = tagEnd; continue; }
         if (!isClose && tagName === 'style')  { inStyle  = true; i = tagEnd; continue; }
 
+        // ── Void element closing tag check ────────────────────────────────────
+        if (isClose && VOID_ELEMENTS.has(tagName)) {
+            const start = document.positionAt(i);
+            const end   = document.positionAt(tagEnd);
+            const diag  = new vscode.Diagnostic(
+                new vscode.Range(start, end),
+                `</${tagName}> is invalid — <${tagName}> is a void element and cannot have a closing tag.`,
+                vscode.DiagnosticSeverity.Error
+            );
+            diag.source = 'Classic ASP (HTML)';
+            diag.code   = VOID_ELEMENT_DIAGNOSTIC_CODE;
+            diagnostics.push(diag);
+            i = tagEnd;
+            continue;
+        }
+
         // Only care about structural tags
         if (!STRUCTURAL_TAGS.has(tagName)) { i = tagEnd; continue; }
 
@@ -206,6 +229,34 @@ function scanHtmlStructure(document: vscode.TextDocument): vscode.Diagnostic[] {
     }
 
     return diagnostics;
+}
+
+// ── Quick-fix code action provider ───────────────────────────────────────────
+
+export class VoidElementQuickFixProvider implements vscode.CodeActionProvider {
+
+    static readonly providedCodeActionKinds = [vscode.CodeActionKind.QuickFix];
+
+    provideCodeActions(
+        document: vscode.TextDocument,
+        _range:   vscode.Range,
+        context:  vscode.CodeActionContext,
+    ): vscode.CodeAction[] {
+        return context.diagnostics
+            .filter(d => d.code === VOID_ELEMENT_DIAGNOSTIC_CODE)
+            .map(diag => {
+                const tagText = document.getText(diag.range);
+                const action  = new vscode.CodeAction(
+                    `Remove \`${tagText}\``,
+                    vscode.CodeActionKind.QuickFix
+                );
+                action.edit        = new vscode.WorkspaceEdit();
+                action.edit.delete(document.uri, diag.range);
+                action.diagnostics = [diag];
+                action.isPreferred = true;
+                return action;
+            });
+    }
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────

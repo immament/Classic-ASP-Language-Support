@@ -233,6 +233,13 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
         return code;
     }
 
+    // Strip closing tags on void elements (e.g. </input>, </br>) before Prettier
+    // sees the HTML — Prettier hard-fails on these. The diagnostic provider already
+    // flags them as errors with a quick fix, so silently removing them here just
+    // prevents formatting from being blocked while the user is still fixing them.
+    const VOID_CLOSING_TAG_RE = /<\/(area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\s*>/gi;
+    code = code.replace(VOID_CLOSING_TAG_RE, '');
+
     const aspSettings      = getAspSettings();
     const prettierSettings = getPrettierSettings();
 

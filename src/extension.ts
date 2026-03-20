@@ -6,7 +6,7 @@ import { AspCompletionProvider } from './providers/aspCompletionProvider';
 import { CssCompletionProvider } from './providers/cssCompletionProvider';
 import { CssHoverProvider } from './providers/cssHoverProvider';
 import { registerCssDiagnostics } from './providers/cssDiagnosticsProvider';
-import { registerHtmlStructureDiagnostics } from './providers/htmlStructureDiagnosticsProvider';
+import { registerHtmlStructureDiagnostics, VoidElementQuickFixProvider } from './providers/htmlStructureDiagnosticsProvider';
 import { registerAspStructureDiagnostics } from './providers/aspStructureDiagnosticsProvider';
 import { JsCompletionProvider } from './providers/jsCompletionProvider';
 import { IncludePathCompletionProvider, AspDefinitionProvider } from './providers/includeProvider';
@@ -119,6 +119,12 @@ export function activate(context: vscode.ExtensionContext) {
         'asp', semanticTokensProviderInstance, ASP_SEMANTIC_LEGEND
     );
 
+    // ── Void element quick fix ─────────────────────────────────────────────────
+    const voidElementQuickFix = vscode.languages.registerCodeActionsProvider(
+        'asp', new VoidElementQuickFixProvider(),
+        { providedCodeActionKinds: VoidElementQuickFixProvider.providedCodeActionKinds }
+    );
+
     // ── Hover docs ────────────────────────────────────────────────────────────
     // Shows docs for functions, subs, variables, COM members, and VBScript keywords.
     const aspHoverProvider = vscode.languages.registerHoverProvider(
@@ -195,6 +201,7 @@ export function activate(context: vscode.ExtensionContext) {
         semanticProvider,
         semanticTokensProviderInstance,
         aspHoverProvider,
+        voidElementQuickFix,
         inlineStyleTrigger,
         htmlAttrPathTrigger,
     );
