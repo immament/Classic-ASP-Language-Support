@@ -224,22 +224,20 @@ function formatMultiLineAspBlock(
 
         // ── Line-continuation continuation line ──────────────────────────
         if (prevHadContinuation) {
-            // Lines that start with a variable/function reference (not a string
-            // literal) cannot be aligned to a quote column — use +1 indent level.
-            // This also resets continuationAlignCol to -1 so that any subsequent
-            // string on the next line is indented at the same +1 level rather than
-            // being mis-aligned to a quote that appeared mid-expression above.
             const startsWithString = trimmed.startsWith('"');
 
             if (!startsWithString) {
-                const aspIndent = getIndentString(baseLevel + aspIndentLevel + 1, settings.useTabs, settings.indentSize);
-                formattedLines.push(aspIndent + trimmed);
-
-                if (trimmed.trimEnd().endsWith('_')) {
-                    // Keep continuation active but switch to +1-level indent mode
-                    // so the next line (string or variable) lands at the same column.
-                    continuationAlignCol = -1;
+                // If we have a valid align column from the first line of the
+                // continuation (e.g. anpSub = "(SELECT " & _  → col 9), use it
+                // for variable lines too so they align with string lines.
+                if (continuationAlignCol !== -1) {
+                    formattedLines.push(' '.repeat(continuationAlignCol) + trimmed);
                 } else {
+                    const aspIndent = getIndentString(baseLevel + aspIndentLevel + 1, settings.useTabs, settings.indentSize);
+                    formattedLines.push(aspIndent + trimmed);
+                }
+
+                if (!trimmed.trimEnd().endsWith('_')) {
                     prevHadContinuation = false;
                     inMultilineString   = false;
                     isInSQLBlock        = false;
