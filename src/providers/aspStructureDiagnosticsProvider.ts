@@ -29,7 +29,7 @@
  */
 
 import * as vscode from 'vscode';
-import { isInsideAspBlock } from '../utils/documentHelper';
+import { isInsideAspBlock } from '../utils/aspUtils';
 
 // ── Block descriptor ──────────────────────────────────────────────────────────
 

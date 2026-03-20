@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { isSelfClosingTag } from '../constants/htmlTags';
-import { isInsideAspBlock } from '../utils/documentHelper';
+import { isInsideAspBlock } from '../utils/aspUtils';
 
 // ── VBScript block keyword constants ───────────────────────────────────────
 

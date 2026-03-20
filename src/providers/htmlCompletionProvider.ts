@@ -5,8 +5,7 @@ import {
     getContext,
     ContextType,
     getCurrentTagName,
-    isInsideTagForAttributes,
-    isInsideAspBlock
+    isInsideTagForAttributes
 } from '../utils/documentHelper';
 
 

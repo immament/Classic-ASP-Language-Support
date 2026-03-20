@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as prettier from 'prettier';
 import { formatSingleAspBlock, getAspSettings, FormatBlockResult } from './aspFormatter';
-import { isInsideAspBlock } from '../utils/documentHelper';
+import { isInsideAspBlock } from '../utils/aspUtils';
 
 // ─── Prettier settings ─────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ export function getPrettierSettings(): PrettierSettings {
         useTabs:                   c.get<boolean>('useTabs',                  false),
         semi:                      c.get<boolean>('semi',                     true),
         singleQuote:               c.get<boolean>('singleQuote',              false),
-        bracketSameLine:           c.get<boolean>('bracketSameLine',          true),
+        bracketSameLine:           c.get<boolean>('bracketSameLine',          false),
         arrowParens:               c.get<string>('arrowParens',               'always'),
         trailingComma:             c.get<string>('trailingComma',             'es5'),
         endOfLine:                 c.get<string>('endOfLine',                 'lf'),
@@ -58,6 +58,46 @@ interface AspBlock {
 
 // Module-level counter keeps IDs unique across calls in the same millisecond.
 let _placeholderCounter = 0;
+
+// ─── JS event attribute masking ───────────────────────────────────────────
+
+interface JsAttrMask {
+    token: string;
+    original: string; // the full attribute value text, quotes excluded
+    quote: string;
+}
+
+// Matches any on* event attribute whose value contains at least one `(` — those
+// are the ones Prettier treats as embedded JS and wraps onto multiple lines.
+const JS_EVENT_ATTR_RE = /\b(on\w+)\s*=\s*("([^"]*\([^"]*)"|'([^']*\([^']*)')/gi;
+
+/** Replaces inline JS event-handler values with opaque tokens so Prettier
+ *  cannot see the parentheses and apply its JS-expression line-wrap logic.
+ *  Returns the rewritten string and a map needed to undo the masking. */
+function maskJsEventAttrs(code: string): { masked: string; masks: JsAttrMask[] } {
+    const masks: JsAttrMask[] = [];
+    const masked = code.replace(JS_EVENT_ATTR_RE, (_, attrName, fullVal, dq, sq) => {
+        const inner = dq ?? sq;
+        const quote = dq !== undefined ? '"' : "'";
+        const token = `JSEVT${_placeholderCounter++}_${Date.now().toString(36)}`;
+        masks.push({ token, original: inner, quote });
+        return `${attrName}=${quote}${token}${quote}`;
+    });
+    return { masked, masks };
+}
+
+/** Restores all JS event-handler values that were masked by maskJsEventAttrs. */
+function restoreJsEventAttrs(code: string, masks: JsAttrMask[]): string {
+    let result = code;
+    for (const { token, original, quote } of masks) {
+        // Prettier may have changed the surrounding quote style — match either.
+        result = result.replace(
+            new RegExp(`["']${token}["']`),
+            `${quote}${original}${quote}`
+        );
+    }
+    return result;
+}
 
 // ─── Safety check ─────────────────────────────────────────────────────────
 
@@ -136,93 +176,50 @@ function hasUnclosedAspTags(code: string): boolean {
 // ─── ASP block classifier ─────────────────────────────────────────────────
 
 /**
- * Walks backwards from `offset` in the original source to determine whether
- * the ASP block at that position is inside a quoted attribute value (inline),
- * between unquoted attributes (midtag), or free-standing (normal).
+ * Determines whether an ASP block is inline (inside a quoted attribute value),
+ * midtag (between unquoted attributes), or normal (free-standing).
+ *
+ * Takes `emittedSoFar` — everything written to maskedCode before this block —
+ * so it has full forward context and never needs to guess from a backwards scan.
+ * Scanning forward from the start is unambiguous: we always know whether a quote
+ * opens or closes an attribute value because we track state as we go.
  */
-function classifyOffset(code: string, offset: number): AspBlockKind {
-    // Strategy: scan backwards to find the nearest enclosing HTML attribute quote.
-    //
-    // HTML attributes use double-quotes `"`, while JS strings inside them use
-    // single-quotes `'`.  When scanning backwards, any quote character (`"` or `'`)
-    // that is immediately preceded by `=` (ignoring whitespace) is an HTML
-    // attribute opening quote — meaning our ASP block is inside that attribute
-    // value, so it is 'inline'.
-    //
-    // All other quotes are JS-string boundaries inside the attribute value.
-    // We track them with a stack so we correctly skip their contents.
-    //
-    // Example (after Prettier wraps across lines):
-    //   onclick="
-    //       someFunc(
-    //           '<%= val %>',   ← scanning backwards from here
-    //       )
-    //   "
-    // Backwards path: ' (JS string close, push "'") → newline, spaces → " (not
-    // matching top of stack which is "'", but preceded by "=" → return 'inline').
+function classifyContext(emittedSoFar: string): AspBlockKind {
+    let inTag     = false;
+    let attrQuote = '';
+    let i         = 0;
 
-    let i = offset - 1;
+    while (i < emittedSoFar.length) {
+        const ch = emittedSoFar[i];
 
-    // Stack of quote chars for JS strings. Top = the innermost open JS string.
-    const quoteStack: string[] = [];
-
-    while (i >= 0) {
-        const ch = code[i];
-
-        // ── Check every quote for the HTML attribute open-quote pattern ──────
-        // Regardless of nesting level, if a quote char is preceded by `=` it is
-        // an HTML attribute boundary that encloses the ASP block.
-        if (ch === '"' || ch === "'") {
-            let j = i - 1;
-            while (j >= 0 && (code[j] === ' ' || code[j] === '\t' || code[j] === '\n' || code[j] === '\r')) {
-                j--;
-            }
-            if (j >= 0 && code[j] === '=') {
-                // HTML attribute opening quote — the ASP block lives inside this value.
-                return 'inline';
-            }
-
-            // Not an attribute open-quote. Treat as JS string boundary.
-            if (quoteStack.length > 0 && quoteStack[quoteStack.length - 1] === ch) {
-                // Matches the innermost open string — this is its opening quote, pop.
-                quoteStack.pop();
-            } else {
-                // Closing quote of a JS string we haven't entered yet — push.
-                quoteStack.push(ch);
-            }
-            i--; continue;
+        if (attrQuote) {
+            if (ch === attrQuote) { attrQuote = ''; }
+            i++; continue;
         }
 
-        // ── Tag boundary characters (only relevant at top-level) ────────────
-        // If we're nested inside a JS string, angle brackets are just content.
-        if (quoteStack.length === 0) {
-            if (ch === '>') {
-                // If this > is part of a %> closing tag, skip the whole <% %> block.
-                if (i > 0 && code[i - 1] === '%') {
-                    i -= 2;
-                    while (i >= 0) {
-                        if (code[i] === '<' && i + 1 < code.length && code[i + 1] === '%') {
-                            i--;
-                            break;
-                        }
-                        i--;
-                    }
-                    continue;
-                }
-                return 'normal';
+        if (inTag) {
+            if (ch === '>') { inTag = false; i++; continue; }
+            if ((ch === '"' || ch === "'") && i > 0 && emittedSoFar[i - 1] === '=') {
+                attrQuote = ch; i++; continue;
             }
-
-            if (ch === '<') {
-                const after = code.substring(i + 1, i + 3);
-                if (after.startsWith('/'))        return 'normal';
-                if (/^[a-zA-Z!?]/.test(after))   return 'midtag';
-                return 'normal';
-            }
+            i++; continue;
         }
 
-        i--;
+        // Outside any tag — look for tag opens, skip HTML comments.
+        if (ch === '<') {
+            if (emittedSoFar.slice(i, i + 4) === '<!--') {
+                const close = emittedSoFar.indexOf('-->', i + 4);
+                i = close === -1 ? emittedSoFar.length : close + 3;
+                continue;
+            }
+            const next = emittedSoFar[i + 1] ?? '';
+            if (/[a-zA-Z!?/]/.test(next)) { inTag = true; }
+        }
+        i++;
     }
 
+    if (attrQuote) return 'inline';
+    if (inTag)     return 'midtag';
     return 'normal';
 }
 
@@ -239,39 +236,42 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
     const aspSettings      = getAspSettings();
     const prettierSettings = getPrettierSettings();
 
-    // ── Step 1: Mask all ASP blocks ──────────────────────────────────────────
+    // ── Step 1: Mask JS event-handler attribute values ───────────────────────
+    // Must happen BEFORE ASP masking so values like onclick="doA('<%= val %>'); doB()"
+    // are captured whole — including embedded ASP expressions — as one opaque token.
+    const { masked: jsPreMasked, masks: jsAttrMasks } = maskJsEventAttrs(code);
+
+    // ── Step 2: Mask all ASP blocks ──────────────────────────────────────────
     // Each ASP block is replaced with a placeholder that Prettier will treat as
     // valid HTML, preserving its position in the output.
 
     const aspBlocks: AspBlock[] = [];
 
-    // Manual scan so we can skip <% ... %> blocks that sit inside an HTML
-    // comment <!-- ... -->.  A regex replace has no context awareness.
     let   maskedCode     = '';
     let   pos            = 0;
     let   inHtmlComment  = false;
 
-    while (pos < code.length) {
+    while (pos < jsPreMasked.length) {
         // ── HTML comment open  <!-- ────────────────────────────────────────
-        if (!inHtmlComment && code.slice(pos, pos + 4) === '<!--') {
+        if (!inHtmlComment && jsPreMasked.slice(pos, pos + 4) === '<!--') {
             // Before entering the comment check it's not an ASP placeholder we
             // already emitted (those start with <!--ASPPH) — shouldn't happen
             // here but guard anyway.
             inHtmlComment = true;
-            maskedCode   += code[pos];
+            maskedCode   += jsPreMasked[pos];
             pos++;
             continue;
         }
         // ── HTML comment close  --> ────────────────────────────────────────
         if (inHtmlComment) {
-            if (code.slice(pos, pos + 3) === '-->') { inHtmlComment = false; }
-            maskedCode += code[pos];
+            if (jsPreMasked.slice(pos, pos + 3) === '-->') { inHtmlComment = false; }
+            maskedCode += jsPreMasked[pos];
             pos++;
             continue;
         }
 
         // ── ASP block  <% ... %> ──────────────────────────────────────────
-        if (code[pos] === '<' && code[pos + 1] === '%') {
+        if (jsPreMasked[pos] === '<' && jsPreMasked[pos + 1] === '%') {
             // Collect any leading horizontal whitespace on this line for indent tracking
             const lineStart   = maskedCode.lastIndexOf('\n') + 1;
             const leadingWS   = maskedCode.slice(lineStart).match(/^[ \t]*/)?.[0] ?? '';
@@ -279,8 +279,8 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             // Find the matching %> (using the same comment-aware logic so a '
             // comment line inside the block can't close it prematurely)
             let end = pos + 2;
-            while (end < code.length) {
-                if (code[end] === '%' && code[end + 1] === '>') {
+            while (end < jsPreMasked.length) {
+                if (jsPreMasked[end] === '%' && jsPreMasked[end + 1] === '>') {
                     // Check whether this %> is on a VBScript comment line.
                     // A VBScript comment starts with ' as the first non-whitespace
                     // character INSIDE the ASP block — not just anywhere on the
@@ -288,10 +288,10 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
                     // current line, or the opening <% tag itself, so that a JS
                     // single-quote that precedes the ASP block on the same line
                     // (e.g.  '<%= cmpy %>'  ) cannot trip the comment check.
-                    const lineBegin      = code.lastIndexOf('\n', end - 1) + 1;
+                    const lineBegin      = jsPreMasked.lastIndexOf('\n', end - 1) + 1;
                     const aspContentStart = pos + 2; // first char after <%
                     const scanFrom       = Math.max(lineBegin, aspContentStart);
-                    const lineUpToClose  = code.slice(scanFrom, end).trimStart();
+                    const lineUpToClose  = jsPreMasked.slice(scanFrom, end).trimStart();
                     if (!lineUpToClose.startsWith("'")) {
                         end += 2; // include the %>
                         break;
@@ -300,8 +300,8 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
                 end++;
             }
 
-            const aspBlock   = code.slice(pos, end);
-            const kind       = classifyOffset(code, pos);
+            const aspBlock   = jsPreMasked.slice(pos, end);
+            const kind       = classifyContext(maskedCode);
             const lineNumber = code.slice(0, pos).split('\n').length - 1;
             const id         = `ASPPH${_placeholderCounter++}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -323,11 +323,11 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             continue;
         }
 
-        maskedCode += code[pos];
+        maskedCode += jsPreMasked[pos];
         pos++;
     }
 
-    // ── Step 2: Run Prettier on the masked HTML ──────────────────────────────
+    // ── Step 3: Run Prettier on the masked HTML ──────────────────────────────
 
     let prettifiedCode: string;
     try {
@@ -610,6 +610,11 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             }
         }
     }
+
+    // ── Step 5b: Restore JS event-handler attribute values ──────────────────
+    // Must happen after ASP blocks are restored so token text is never
+    // accidentally matched inside a reconstructed ASP expression.
+    restoredCode = restoreJsEventAttrs(restoredCode, jsAttrMasks);
 
     // ── Step 6: Fix broken whitespace-sensitive tags (e.g. <textarea>) ───────
     // When ASPINLINE tokens are long, Prettier wraps the closing `>` of the
