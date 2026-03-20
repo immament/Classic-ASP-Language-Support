@@ -184,6 +184,35 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                     }
                     stitchedValue = lits.join(' ');
                 }
+            } else {
+                // No string literal on the assignment line itself — the RHS may start
+                // with a function call like BuildBOMCTE(...) & _ followed by string
+                // literals on continuation lines. Walk forward to find the first quote.
+                const rhsTrimmed = lineText.trimEnd();
+                if (rhsTrimmed.endsWith('_') && rhsTrimmed.slice(0, -1).trimEnd().endsWith('&')) {
+                    for (let scanLi = li + 1; scanLi < lineCount; scanLi++) {
+                        const scanText  = lineTextCache[scanLi];
+                        const scanQuote = scanText.indexOf('"');
+                        if (scanQuote !== -1) {
+                            const group = extractSqlGroup(document, scanLi, scanQuote);
+                            if (group !== null) {
+                                stitchedValue = group.stitched;
+                                for (const seg of group.segments) { processedAssignLines.add(seg.lineIndex); }
+                            } else {
+                                const strPat = /"((?:[^"]|"")*)"/g;
+                                let sm: RegExpExecArray | null;
+                                const lits: string[] = [];
+                                while ((sm = strPat.exec(scanText)) !== null) {
+                                    lits.push(sm[1].replace(/""/g, '"'));
+                                }
+                                stitchedValue = lits.join(' ');
+                            }
+                            break;
+                        }
+                        // Stop if this continuation line doesn't continue further
+                        if (!scanText.trimEnd().endsWith('_')) { break; }
+                    }
+                }
             }
 
             if (!stitchedValue) { continue; }
@@ -355,28 +384,46 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                 const rm = returnPattern.exec(stripped);
                 if (!rm) { continue; }
 
-                // Found a return assignment — check if it contains a string literal
-                const quoteCol = lineText.indexOf('"');
+                // Found a return assignment — check if it contains a string literal.
+                // When quoteCol === -1 the return line uses a line continuation (_ at end)
+                // with the actual string on the next line e.g. BuildBOMCTE = _ / "WITH BOM..."
+                // Walk continuation lines to find the first quote, same as Pass A does.
+                let quoteCol = lineText.indexOf('"');
+                let quoteLi  = li;
+
                 if (quoteCol === -1) {
-                    // RHS has no string literal on this line — could be a variable
-                    // or a non-string expression.  We don't flag it either way;
-                    // we just note there was *some* return assignment.
-                    foundStringReturn = true; // pessimistically treat as string-capable
-                    continue;
+                    const rhsTrimmed = lineText.trimEnd();
+                    if (rhsTrimmed.endsWith('_') && rhsTrimmed.slice(0, -1).trimEnd().endsWith('=')) {
+                        for (let scanLi = li + 1; scanLi <= fn.endLine; scanLi++) {
+                            const scanText  = lineTextCache[scanLi];
+                            const scanQuote = scanText.indexOf('"');
+                            if (scanQuote !== -1) {
+                                quoteCol = scanQuote;
+                                quoteLi  = scanLi;
+                                break;
+                            }
+                            if (!scanText.trimEnd().endsWith('_')) { break; }
+                        }
+                    }
+                    if (quoteCol === -1) {
+                        foundStringReturn = true; // pessimistically treat as string-capable
+                        continue;
+                    }
                 }
 
                 foundStringReturn = true;
 
                 // Try to stitch multi-line string the same way assignmentMap does
-                const group = extractSqlGroup(document, li, quoteCol);
+                const group = extractSqlGroup(document, quoteLi, quoteCol);
                 let stitched = '';
                 if (group !== null) {
                     stitched = group.stitched;
                 } else {
+                    const quoteLine = lineTextCache[quoteLi];
                     const strPat = /"((?:[^"]|"")*)"/g;
                     let sm: RegExpExecArray | null;
                     const lits: string[] = [];
-                    while ((sm = strPat.exec(lineText)) !== null) {
+                    while ((sm = strPat.exec(quoteLine)) !== null) {
                         lits.push(sm[1].replace(/""/g, '"'));
                     }
                     stitched = lits.join(' ');
@@ -384,7 +431,7 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
                 if (stitched && (isSqlOrFragment(stitched) || isSqlClauseFragment(stitched))) {
                     isSqlReturn = true;
-                    break; // one confirmed SQL return is enough
+                    break;
                 }
             }
 
@@ -528,17 +575,29 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             // and forwards to find if there's a string sentinel after the following &.
             // If BOTH sides are flanked by string literals → value interpolation → skip.
             function isValueInterpolation(startInRhs: number, endInRhs: number): boolean {
-                // Look left: skip whitespace, expect &, skip whitespace, expect §
+                // Look left: skip whitespace, then expect either:
+                //   (a) & followed by § — direct string flanking: "sql" & var & "sql"
+                //   (b) ( or , — identifier is a function argument: Replace(var, ...) or f(x, var)
                 let l = startInRhs - 1;
                 while (l >= 0 && (rhsText[l] === ' ' || rhsText[l] === '\t')) { l--; }
-                if (l < 0 || rhsText[l] !== '&') { return false; }
-                l--;
-                while (l >= 0 && (rhsText[l] === ' ' || rhsText[l] === '\t')) { l--; }
-                const leftIsStr = l >= 0 && rhsText[l] === '§';
+                if (l < 0) { return false; }
 
-                // Look right: skip the call's closing paren if any, then skip whitespace, expect &, skip whitespace, expect §
+                let leftIsStr: boolean;
+                if (rhsText[l] === '(' || rhsText[l] === ',') {
+                    // Inside a function call — definitely a value argument
+                    leftIsStr = true;
+                } else if (rhsText[l] === '&') {
+                    l--;
+                    while (l >= 0 && (rhsText[l] === ' ' || rhsText[l] === '\t')) { l--; }
+                    leftIsStr = l >= 0 && rhsText[l] === '§';
+                } else {
+                    return false;
+                }
+
+                // Look right: skip the identifier's own call parens if any, then expect either:
+                //   (a) & followed by § — direct string flanking
+                //   (b) ) or , — identifier is inside a function call
                 let r = endInRhs;
-                // skip balanced parens for function calls
                 if (r < rhsText.length && rhsText[r] === '(') {
                     let depth = 1; r++;
                     while (r < rhsText.length && depth > 0) {
@@ -548,10 +607,18 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                     }
                 }
                 while (r < rhsText.length && (rhsText[r] === ' ' || rhsText[r] === '\t')) { r++; }
-                if (r >= rhsText.length || rhsText[r] !== '&') { return false; }
-                r++;
-                while (r < rhsText.length && (rhsText[r] === ' ' || rhsText[r] === '\t')) { r++; }
-                const rightIsStr = r < rhsText.length && rhsText[r] === '§';
+                if (r >= rhsText.length) { return false; }
+
+                let rightIsStr: boolean;
+                if (rhsText[r] === ')' || rhsText[r] === ',') {
+                    rightIsStr = true;
+                } else if (rhsText[r] === '&') {
+                    r++;
+                    while (r < rhsText.length && (rhsText[r] === ' ' || rhsText[r] === '\t')) { r++; }
+                    rightIsStr = r < rhsText.length && rhsText[r] === '§';
+                } else {
+                    return false;
+                }
 
                 return leftIsStr && rightIsStr;
             }
