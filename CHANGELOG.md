@@ -5,6 +5,29 @@ All notable changes to the "Classic ASP Language Support" extension will be docu
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2026-03-21
+
+### ✨ Added
+- **Enhanced README design** - Cleaner layout with compatibility table, side-by-side GIFs, and snippet documentation
+- **HTML tag validation** - Error checking for incorrect closing tags
+
+### 🛠️ Fixed
+- **Fixed CSS/HTML suggestions in file completion** - File path suggestions no longer contaminated with CSS/HTML keywords
+- **Fixed multiline tags with inline VBScript** - Errors no longer occur when VBScript appears in multiline HTML tags
+- **Fixed missing SQL colouring for asterisk** - `SELECT *` now colours correctly
+- **Fixed SQL colouring for functions** - Functions returning SQL queries now detect and colour properly
+- **Fixed dollar sign ($) SQL colouring** - `$` now colours correctly in SQL strings
+- **Fixed multiline string alignment** - String concatenation with variables now aligns correctly
+- **Fixed `<%= %>` indentation in HTML tags** - Inline ASP expressions in HTML attributes now indent correctly
+- **Improved SQL detection** - More accurate detection of SQL queries vs plain strings
+- **Various formatter improvements** - Edge cases and stability fixes
+
+### 🔄 Changed
+- **Extension icon size** - Optimised icon dimensions
+- **Extension description** - More direct and user-friendly: "Formatting, IntelliSense, Auto-Completion, and Syntax Highlighting for Classic ASP files with HTML, CSS, JavaScript, SQL, and VBScript"
+
+---
+
 ## [0.3.6] - 2026-03-16
 
 ### ✨ Added
@@ -237,6 +260,7 @@ First public release focused on Classic ASP code formatting.
 
 ---
 
+[0.3.7]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.7
 [0.3.6]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.6
 [0.3.5]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.5
 [0.3.4]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.4
