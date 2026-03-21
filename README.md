@@ -13,189 +13,184 @@
 
 ---
 
-<h4 align="center">
-  <em>"Finally, an extension that understands Classic ASP! Because legacy codebases deserve support too." ¯\_(ツ)_/¯</em>
-</h4>
-
----
-
-## ✨ What's Inside
-
-<table>
-    <tr>
-        <td width="33%" align="center" valign="top">
-            <h3><strong>🎨 Smart Formatting</strong></h3>
-            <p>Multi-language formatting for VBScript, HTML, CSS, and JavaScript with customisable keyword casing</p>
-            <p></p>
-        </td>
-        <td width="33%" align="center" valign="top">
-            <h3><strong>🌈 Syntax Highlighting</strong></h3>
-            <p>Beautiful, theme-compatible syntax colouring for ASP regions and SQL queries</p>
-            <p></p>
-        </td>
-        <td width="33%" align="center" valign="top">
-            <h3><strong>💡 IntelliSense</strong></h3>
-            <p>Smart object tracking, cross-file suggestions, hover docs, and auto-completion for ASP, VBScript, HTML, CSS, and JavaScript</p>
-            <p></p>
-        </td>
-    </tr>
-</table>
-
----
-
 ## 📸 See It In Action
 
-### 🎨 Formatting Before & After
-> *Colours in these previews are made possible by the **[Catppuccin Theme](https://github.com/catppuccin/vscode)***
+> *Using **[Catppuccin Theme](https://github.com/catppuccin/vscode)***
 
-<img src="images/format.gif" height="480">
-
-
-### 🌈 Syntax Highlighting
-
-<img src="images/sql.gif" width="500">
-
-<!-- Add GIF showing complex multi-block ASP formatting -->
-<!--
-### ⚙️ Multi-Block Formatting
-<details>
-<summary>📝 <b>Open Me For A Gif</b></summary>
-
-- If/Else/Loop structures spanning multiple `<% %>` blocks
-- Inline ASP expressions in HTML attributes
-- Complex mixed HTML/ASP structures
-</details>
--->
+| Formatting Before & After | SQL Syntax Highlighting |
+|:------:|:-----:|
+| <img src="images/format.gif" height="450"> | <img src="images/sql.gif" width="400"> |
 
 ---
 
-## 🚀 Installation
-
-1. Install from VS Code Extensions Marketplace (search for "Classic ASP Language Support")
-2. Or install from `.vsix` file: Extensions → Install from VSIX
-
----
-
-## 📖 Usage
+## 🚀 Quick Start
 
 | Action | Shortcut |
 |--------|----------|
-| **Format Document** | `Alt + Shift + F` (Windows/Linux)<br>`Option + Shift + F` (Mac) |
-| **Trigger IntelliSense** | Start typing or `Ctrl + Space` |
-| **Insert Snippet** | Type prefix and press `Tab` |
+| Format document | `Alt + Shift + F` (Win/Linux) · `Option + Shift + F` (Mac) |
+| Trigger IntelliSense | `Ctrl + Space` or just start typing |
+| Insert snippet | Type prefix → `Tab` |
+| Go to definition | `F12` or `Ctrl + Click` |
+| Follow include link | `Ctrl + Click` on the file path |
 
 ---
 
-## 🎯 Key Features
+## ✨ Features
 
-<details open>
-<summary><strong>🎨 Multi-Language Formatting</strong></summary>
+### 🎨 Smart Formatting
+- **Multi-language** — VBScript, HTML, CSS, JavaScript, and SQL in a single keystroke
+- **VBScript** — smart indentation across all control structures and multi-block `<% %>` regions
+- **HTML/CSS/JS** — formatted by Prettier, fully configurable
+- **Keyword casing** — your choice of `PascalCase`, `UPPERCASE`, or `lowercase`
 
-- ✅ **VBScript**: Smart indentation for all control structures (If/For/While/Select Case/Sub/Function)
-- ✅ **HTML/CSS/JavaScript**: Professional formatting powered by Prettier
-- ✅ **SQL**: Proper indentation for SQL queries inside ASP strings
-- ✅ **Customisable keyword casing**: Choose lowercase, UPPERCASE, or PascalCase
-- ✅ **Automatic operator spacing**: Proper spacing around `=`, `+`, `&`, etc.
-- ✅ **Multi-block support**: Handles structures that span across multiple `<% %>` blocks
-- ✅ **Inline ASP support**: Formats ASP expressions in HTML attributes
-</details>
-<br>
+### 💡 IntelliSense & Auto-Completion
+- **Context-aware** — correct suggestions whether you're in ASP, CSS, JS, or HTML
+- **COM object tracking** — type `rs.` after `Set rs = Server.CreateObject("ADODB.Recordset")` to see all methods and properties
+- **Cross-file IntelliSense** — variables and functions from `#include`'d files appear in suggestions automatically
+- **File paths** — live browsing inside `#include` and `href`/`src`/`action` attributes
 
-<details open>
-<summary><strong>💡 IntelliSense & Auto-Completion</strong></summary>
+### 🔍 Hover, Definition & Links
+- **Hover docs** — inline documentation for keywords, functions, COM members, and CSS properties
+- **Go to definition** — `F12` across the current file and all included files
+- **Document links** — `Ctrl + Click` navigation on `#include` paths and local file attributes
 
-- **HTML**: Tag and attribute suggestions with smart auto-closing
-- **CSS**: Property completion inside inline and `<style>` tags
-- **JavaScript**: Keyword and object completion inside `<script>` tags
-- **ASP/VBScript**: Response, Request, Server, Session, Application objects and VBScript keywords
-- **Smart object tracking**: Type `rs.` or `dict.` for Recordset/Dictionary method suggestions
-- **CreateObject tracking**: Automatically suggests methods based on COM objects you create
-- **Cross-file IntelliSense**: Variable and function suggestions from included `.inc` files
-- **Function suggestions**: Previously defined functions appear as suggestions
-- **Hover documentation**: Hover over VBScript keywords for explanations and usage info
-- **Include file autocomplete**: Autocomplete for `<!-- #include file="" -->` with directory browsing
-- **Go to file support**: Click on include file paths to navigate directly to the file
-</details>
-<br>
+### 🌈 Syntax Highlighting
+- **ASP regions** — toggleable background colouring for `<% %>` blocks, light and dark themes
+- **Semantic colouring** — user-defined functions and sub names
+- **Smart SQL** — highlights SQL inside strings; plain strings are left untouched
 
-<details>
-<summary><strong>📝 Snippets</strong></summary>
+### 🔴 Diagnostics
+- **HTML** — mismatched structural tags flagged with orange squiggles
+- **VBScript** — unmatched control blocks (`If/End If`, `Sub/End Sub`, `For/Next`, etc.)
+- **CSS** — errors and warnings inside `<style>` blocks as you type
+- **Void elements** — invalid closing tags caught with a *one-click quick fix*
 
-- ✅ Pre-built snippets for HTML, ASP, and JavaScript patterns
-- ✅ Quick insertion for common structures (loops, conditionals, database connections)
-</details>
-<br>
+### ⌨️ Smart Key Handling
+- **Context-aware Enter/Tab** — correct indentation inside `<% %>` blocks automatically
+- **Auto de-indent** — closing keywords (`End If`, `Next`, etc.) de-indent as you type
+- **Auto-close** — HTML and ASP comment blocks close automatically
+
+### 📝 Snippets
 
 <details>
-<summary><strong>🌈 Syntax Highlighting</strong></summary>
+<summary>ASP / VBScript</summary>
 
-- ✅ Toggleable ASP region highlighting with customisable colours for `<% %>` blocks
-- ✅ Compatible with all VS Code themes
-- ✅ Distinct colours for keywords, functions, data types, operators, and parameters
-- ✅ SQL string usage warnings - Alerts when variables are used for both SQL and regular strings
-- ✅ Smart SQL detection - Only colours SQL when it detects actual queries
-- ✅ Semantic token colouring - Enhanced VBScript function/sub highlighting
+| Prefix | Inserts |
+|--------|---------|
+| `asp` | `<% %>` code block |
+| `aspo` | `<%= %>` output expression |
+| `rw` | `Response.Write("...")` |
+| `rr` | `Response.Redirect("...")` |
+| `rf` | `Request.Form("...")` |
+| `rq` | `Request.QueryString("...")` |
+| `sco` | `Server.CreateObject("...")` |
+| `dbconn` | Full ADODB.Connection open/close template |
+| `rs` | Full Recordset open → loop → close template |
+| `inc` | `<!--#include file="..."-->` |
+
 </details>
-<br>
+
+<details>
+<summary>HTML</summary>
+
+| Prefix | Inserts |
+|--------|---------|
+| `html5` | HTML5 boilerplate |
+| `!` | `<!DOCTYPE html>` |
+| `table` | Table with `<thead>` and `<tbody>` |
+| `form` | Form with action and method |
+| `divc` / `divid` | Div with class / ID |
+| `script:src` | External script tag |
+| `link:css` | Stylesheet link tag |
+
+</details>
+
+<details>
+<summary>JavaScript</summary>
+
+| Prefix | Inserts |
+|--------|---------|
+| `log` | `console.log()` |
+| `fetch` | Fetch API with `.then()` / `.catch()` |
+| `listener` | `addEventListener` with handler |
+| `gebi` | `document.getElementById()` |
+| `qs` | `document.querySelector()` |
+| `timeout` | `setTimeout` with callback |
+
+</details>
+
+---
+
+## 🔌 Compatibility
+
+| | Extension | Status | Notes |
+|:---:|-----------|:------:|-------|
+| <img src="images/ext-prettier.png" width="40"> | [Prettier] | ✅ Integrated | Already bundled — no separate install needed |
+| <img src="images/ext-error-lens.png" width="40"> | [Error Lens] | ✅ Compatible | Displays diagnostics inline |
+| <img src="images/ext-auto-rename-tag.png" width="40"> | [Auto Rename Tag] | ✅ Compatible | Rename opening/closing HTML tags together |
+| <img src="images/ext-gitlens.png" width="40"> | [GitLens] | ✅ Compatible | Git blame, history, and code insights |
+| <img src="images/ext-indent-rainbow.png" width="40"> | [Indent Rainbow] | ✅ Compatible | Colour-coded indentation levels |
+| <img src="images/ext-lorem-ipsum.png" width="40"> | [Lorem Ipsum] | ✅ Compatible | Quick placeholder text insertion |
+| <img src="images/ext-color-highlight.png" width="40"> | [Color Highlight] | ✅ Compatible | Highlights CSS colour values inline |
+| <img src="images/ext-better-comments.png" width="40"> | [Better Comments] | ✅ Compatible | Colour-coded comment annotations |
+| <img src="images/ext-inline-bookmarks.png" height="40"> | [Inline Bookmarks] | ✅ Compatible | In-editor bookmark tracking |
+| <img src="images/ext-http-status-codes.png" width="40"> | [HTTP Status Codes] | ✅ Compatible | HTTP status code reference on hover |
+| <img src="images/ext-asp-html-tag-matcher.png" width="40"> | [ASP HTML Tag Matcher] | ✅ Compatible | Highlights matching HTML tags in ASP files |
+| <img src="images/ext-html-css-support.png" width="40"> | [HTML CSS Support] | ⚠️ Caution | May conflict with built-in HTML completions — test before use |
+| <img src="images/ext-asp-classic-support.png" width="40"> | [ASP Classic Support] | ❌ Incompatible | Already integrated into this extension |
+| <img src="images/ext-classic-asp-syntaxes.png" width="40"> | [Classic ASP Syntaxes & Snippets] | ❌ Incompatible | Already integrated into this extension |
+
+> 💡 **Bracket pair colourisation** works natively with ASP files — enable it via `editor.bracketPairColorization.enabled` and `editor.guides.bracketPairs` in VS Code settings.
 
 ---
 
 ## ⚙️ Configuration
 
 <details>
-<summary><strong>⚙️ Formatter Settings</strong></summary>
+<summary><strong>📋 Full Settings List</strong></summary>
 
-Access settings via `File → Preferences → Settings` and search for "Classic ASP Language Support".
-
-| Setting | Default | Options | Description |
-|---------|---------|---------|-------------|
-| `aspLanguageSupport.keywordCase` | `PascalCase` | `lowercase`, `UPPERCASE`, `PascalCase` | ASP/VBScript keyword formatting style |
-| `aspLanguageSupport.useTabs` | `false` | `true`, `false` | Use tabs instead of spaces for ASP code indentation |
-| `aspLanguageSupport.indentSize` | `2` | `2`, `4`, `8` | Number of spaces per indentation level for ASP code |
-| `aspLanguageSupport.asptagsOnSameLine` | `false` | `true`, `false` | Keep `<% %>` on same line as code (default: separate lines) |
-</details>
-<br>
-
-<details>
-<summary><strong>🎨 Prettier Settings (HTML/CSS/JS)</strong></summary>
-
-| Setting | Default | Options | Description |
-|---------|---------|---------|-------------|
-| `aspLanguageSupport.prettier.printWidth` | `80` | number | Maximum line length (Prettier) |
-| `aspLanguageSupport.prettier.tabWidth` | `2` | `2`, `4`, `8` | Spaces per indentation level (Prettier) |
-| `aspLanguageSupport.prettier.useTabs` | `false` | `true`, `false` | Use tabs instead of spaces (Prettier) |
-| `aspLanguageSupport.prettier.bracketSameLine` | `true` | `true`, `false` | Put `>` of multi-line elements on last line (Prettier) |
-| `aspLanguageSupport.prettier.semi` | `true` | `true`, `false` | Add semicolons to JavaScript statements (Prettier) |
-| `aspLanguageSupport.prettier.singleQuote` | `false` | `true`, `false` | Use single quotes in JavaScript (Prettier) |
-| `aspLanguageSupport.prettier.arrowParens` | `always` | `always`, `avoid` | Arrow function parameter parentheses (Prettier) |
-| `aspLanguageSupport.prettier.trailingComma` | `es5` | `none`, `es5`, `all` | Trailing comma style (Prettier) |
-| `aspLanguageSupport.prettier.endOfLine` | `lf` | `lf`, `crlf`, `cr`, `auto` | Line ending style (Prettier) |
-| `aspLanguageSupport.prettier.htmlWhitespaceSensitivity` | `css` | `css`, `strict`, `ignore` | HTML whitespace handling (Prettier) |
-</details>
-<br>
-
-<details>
-<summary><strong>🌈 Completion & Highlighting Settings</strong></summary>
+### VBScript Formatting
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `aspLanguageSupport.highlightAspRegions` | `true` | Highlight ASP code regions with background colours |
-| `aspLanguageSupport.bracketLightColor` | `rgba(255, 100, 0, 0.2)` | ASP bracket `<% %>` colour (light theme) |
-| `aspLanguageSupport.bracketDarkColor` | `rgba(0, 100, 255, 0.2)` | ASP bracket `<% %>` colour (dark theme) |
-| `aspLanguageSupport.codeBlockLightColor` | `rgba(100, 100, 100, 0.1)` | ASP code block background (light theme) |
-| `aspLanguageSupport.codeBlockDarkColor` | `rgba(220, 220, 220, 0.1)` | ASP code block background (dark theme) |
+| `aspLanguageSupport.keywordCase` | `PascalCase` | `lowercase` · `UPPERCASE` · `PascalCase` |
+| `aspLanguageSupport.aspTagsOnSameLine` | `false` | Keep `<% %>` on the same line as code |
+| `aspLanguageSupport.htmlIndentMode` | `flat` | `flat` — VBScript always at column 0; `continuation` — follows HTML nesting |
+
+### Prettier (HTML/CSS/JS)
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `aspLanguageSupport.prettier.printWidth` | `80` | Wrap lines at this column width |
+| `aspLanguageSupport.prettier.tabWidth` | `2` | Spaces per indentation level |
+| `aspLanguageSupport.prettier.useTabs` | `false` | Use tabs instead of spaces |
+| `aspLanguageSupport.prettier.bracketSameLine` | `false` | Put `>` on last attribute line |
+| `aspLanguageSupport.prettier.semi` | `true` | Add semicolons in JavaScript |
+| `aspLanguageSupport.prettier.singleQuote` | `false` | Use single quotes in JavaScript |
+| `aspLanguageSupport.prettier.arrowParens` | `always` | Arrow function parentheses |
+| `aspLanguageSupport.prettier.trailingComma` | `es5` | Trailing comma style |
+| `aspLanguageSupport.prettier.endOfLine` | `lf` | Line ending style |
+| `aspLanguageSupport.prettier.htmlWhitespaceSensitivity` | `css` | HTML whitespace handling |
+
+### Syntax Highlighting
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `aspLanguageSupport.highlightAspRegions` | `true` | Highlight ASP regions |
+| `aspLanguageSupport.bracketLightColor` | `rgba(255, 100, 0, 0.2)` | Bracket colour (light theme) |
+| `aspLanguageSupport.bracketDarkColor` | `rgba(0, 100, 255, 0.2)` | Bracket colour (dark theme) |
+| `aspLanguageSupport.codeBlockLightColor` | `rgba(100, 100, 100, 0.1)` | Code block colour (light) |
+| `aspLanguageSupport.codeBlockDarkColor` | `rgba(220, 220, 220, 0.1)` | Code block colour (dark) |
+
 </details>
-<br>
 
 ---
 
 ## 📋 Known Limitations
 
-> **Note:** These are edge cases that may require manual adjustment
-
-- ASP blocks must be properly closed (`<% ... %>`)
-- Complex mixed HTML/ASP structures may require manual adjustment
-- The formatter has been significantly improved but may still have rare edge cases
+- ASP blocks must be properly closed (`<% ... %>`) for formatting and diagnostics to work correctly
+- Complex mixed HTML/ASP structures may occasionally require manual adjustment after formatting
+- `#include virtual="..."` paths are resolved from the first workspace folder root
 
 ---
 
@@ -204,25 +199,14 @@ Access settings via `File → Preferences → Settings` and search for "Classic 
 <details>
 <summary><b>Building from Source</b></summary>
 
-### Prerequisites
-- Node.js 16.x or higher
-- Visual Studio Code 1.80.0 or higher
-
-### Build Steps
+**Prerequisites:** Node.js 16+ · VS Code 1.80+
 
 ```bash
-# Clone the repository
 git clone https://github.com/ashtonckj/Classic-ASP-Language-Support.git
 cd Classic-ASP-Language-Support
-
-# Install dependencies
 npm install
-
-# Compile TypeScript
 npm run compile
-
-# Run extension in debug mode
-# Press F5 in VS Code
+# Press F5 in VS Code to launch the Extension Development Host
 ```
 </details>
 
@@ -256,3 +240,18 @@ If you find this extension helpful, please consider leaving a ⭐ on GitHub and 
 **Made with ❤️ for the Classic ASP community**
 
 </div>
+
+[Prettier]: https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode
+[Error Lens]: https://marketplace.visualstudio.com/items?itemName=usernamehw.errorlens
+[Auto Rename Tag]: https://marketplace.visualstudio.com/items?itemName=formulahendry.auto-rename-tag
+[GitLens]: https://marketplace.visualstudio.com/items?itemName=eamodio.gitlens
+[Indent Rainbow]: https://marketplace.visualstudio.com/items?itemName=oderwat.indent-rainbow
+[Lorem Ipsum]: https://marketplace.visualstudio.com/items?itemName=Tyriar.lorem-ipsum
+[Color Highlight]: https://marketplace.visualstudio.com/items?itemName=naumovs.color-highlight
+[Better Comments]: https://marketplace.visualstudio.com/items?itemName=aaron-bond.better-comments
+[Inline Bookmarks]: https://marketplace.visualstudio.com/items?itemName=tintinweb.vscode-inline-bookmarks
+[HTTP Status Codes]: https://marketplace.visualstudio.com/items?itemName=beatzoid.http-status-codes
+[ASP HTML Tag Matcher]: https://marketplace.visualstudio.com/items?itemName=sabahweb.asp-html-tag-matcher
+[HTML CSS Support]: https://marketplace.visualstudio.com/items?itemName=ecmel.vscode-html-css
+[ASP Classic Support]: https://marketplace.visualstudio.com/items?itemName=zbecknell.asp-classic-support
+[Classic ASP Syntaxes & Snippets]: https://marketplace.visualstudio.com/items?itemName=jtjoo.classic-asp-html
