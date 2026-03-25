@@ -98,6 +98,12 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
     const strippedText = text.replace(/<!--[\s\S]*?-->/g, m => m.replace(/[^\n]/g, ' '));
     const lines = strippedText.split('\n');
 
+    // Detect Option Explicit anywhere in the file (outside of string literals).
+    // When present, VBScript requires all variables to be declared with Dim/Const,
+    // so implicit assignment tracking would only add noise — loop counters, temp
+    // vars, and typos would all surface as false symbol suggestions.
+    const hasOptionExplicit = /^\s*Option\s+Explicit\b/im.test(strippedText);
+
     lines.forEach((line, lineIndex) => {
         // Skip full-line VBScript comments
         if (/^\s*'/.test(line)) return;
@@ -118,16 +124,21 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
         }
 
         // Implicit assignment (undeclared variables, no Option Explicit)
-        const implicitMatch = lineNoComment.match(/^\s*([a-zA-Z_]\w*)\s*=/i);
-        if (implicitMatch) {
-            const name = implicitMatch[1];
-            const nameLower = name.toLowerCase();
-            const skipWords = new Set([
-                'dim','redim','set','const','if','for','while','do',
-                'function','sub','class','select','with','on','option',
-            ]);
-            if (!skipWords.has(nameLower) && !result.variables.some(v => v.name.toLowerCase() === nameLower)) {
-                result.variables.push({ name, line: lineIndex, filePath });
+        // Skipped entirely when Option Explicit is present — in that mode every
+        // real variable must be Dim'd, so implicit assignments are either already
+        // captured above or are typos/loop counters we don't want in suggestions.
+        if (!hasOptionExplicit) {
+            const implicitMatch = lineNoComment.match(/^\s*([a-zA-Z_]\w*)\s*=/i);
+            if (implicitMatch) {
+                const name = implicitMatch[1];
+                const nameLower = name.toLowerCase();
+                const skipWords = new Set([
+                    'dim','redim','set','const','if','for','while','do',
+                    'function','sub','class','select','with','on','option',
+                ]);
+                if (!skipWords.has(nameLower) && !result.variables.some(v => v.name.toLowerCase() === nameLower)) {
+                    result.variables.push({ name, line: lineIndex, filePath });
+                }
             }
         }
 
