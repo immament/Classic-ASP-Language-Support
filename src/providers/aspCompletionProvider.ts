@@ -5,27 +5,16 @@ import { collectAllSymbols } from './includeProvider';
 import { COM_TYPE_MAP } from '../constants/comObjects';
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Builds a variable → progId map from the combined symbols
-// (current doc + all include files), used for dot-access member completions.
-// ─────────────────────────────────────────────────────────────────────────────
-function buildComVarMap(documentText: string, includeComVars: { name: string; progId: string }[]): Map<string, string> {
+// Builds a variable → progId map from the combined symbols collected by
+// collectAllSymbols (current doc + includes + chained COM inference).
+// No need to re-scan the document text here — extractSymbols already did it.
+function buildComVarMap(includeComVars: { name: string; progId: string }[]): Map<string, string> {
     const map = new Map<string, string>();
-
-    // From the current document text directly
-    const pattern = /\bSet\s+(\w+)\s*=\s*(?:Server\.)?CreateObject\s*\(\s*["']([^"']+)["']\s*\)/gi;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(documentText)) !== null) {
-        map.set(match[1].toLowerCase(), match[2].toLowerCase());
-    }
-
-    // From include files (already parsed by collectAllSymbols)
     for (const cv of includeComVars) {
         if (!map.has(cv.name.toLowerCase())) {
             map.set(cv.name.toLowerCase(), cv.progId);
         }
     }
-
     return map;
 }
 
@@ -46,7 +35,6 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
         }
 
         const textBefore   = getTextBeforeCursor(document, position);
-        const documentText = document.getText();
         const lineText     = document.lineAt(position.line).text.substring(0, position.character);
         const completions: vscode.CompletionItem[] = [];
 
@@ -77,7 +65,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
 
         // Collect all symbols from this document + any included files
         const allSymbols = collectAllSymbols(document);
-        const comVarMap  = buildComVarMap(documentText, allSymbols.comVariables);
+        const comVarMap  = buildComVarMap(allSymbols.comVariables);
 
         // ── 1. Object member access  e.g. "rs."  or "rs.EO" ─────────────────
         // Matches:  word.  OR  word.partialword  (both need member completions)
