@@ -1,0 +1,10 @@
+{
+    "iconDefinitions": {
+        "_asp_file": {
+            "iconPath": "../icons/asp_file.png"
+        }
+    },
+    "fileExtensions": {
+        "asp": "_asp_file"
+    }
+}
