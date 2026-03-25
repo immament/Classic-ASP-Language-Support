@@ -13,6 +13,7 @@ import { IncludePathCompletionProvider, AspDefinitionProvider } from './provider
 import { IncludeDocumentLinkProvider, HtmlAttributeLinkProvider, HtmlAttributePathCompletionProvider } from './providers/linkProvider';
 import { AspSemanticTokensProvider, ASP_SEMANTIC_LEGEND } from './providers/aspSemanticProvider';
 import { AspHoverProvider } from './providers/aspHoverProvider';
+import { AspRenameProvider } from './providers/aspRenameProvider';
 import { addRegionHighlights } from './highlight';
 
 // Returns line-level TextEdits instead of replacing the whole document.
@@ -194,6 +195,13 @@ export function activate(context: vscode.ExtensionContext) {
         'asp', new AspDefinitionProvider()
     );
 
+    // ── Rename ────────────────────────────────────────────────────────────────
+    // F2 rename for VBScript functions, subs, variables, constants, and COM vars.
+    // Works across the current file and all transitively #include'd files.
+    const renameProvider = vscode.languages.registerRenameProvider(
+        'asp', new AspRenameProvider()
+    );
+
     // ── Semantic tokens ───────────────────────────────────────────────────────
     // Highlights user-defined function/sub names using VS Code's semantic token API.
     const semanticTokensProviderInstance = new AspSemanticTokensProvider();
@@ -279,6 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
         htmlAttributeLinkProvider,
         htmlAttributePathProvider,
         definitionProvider,
+        renameProvider,
         semanticProvider,
         semanticTokensProviderInstance,
         aspHoverProvider,
