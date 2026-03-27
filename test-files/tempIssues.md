@@ -155,3 +155,21 @@ The check `if (afterTagName && afterTagName[1].trim().length > 0)` means attribu
 The ⚠️ Caution note says it "may conflict." It would be more useful to describe the specific conflict (duplicate HTML attribute completions) and the specific workaround (disable the HTML completions in that extension's settings), so users can actually use both if they want to.
 
 Summary of the top 3 things to fix before calling it v1.0.0, in order of severity: the global `wordBasedSuggestions` override (bug that harms every language), the `collectAllSymbols` caching (performance issue that affects the entire editing experience on real projects), and the undeclared `enableHTMLCompletion/enableJSCompletion` settings (feature flags that silently don't work). Everything else is polish or additive.
+
+
+
+FAHHH issues
+```vbscript
+stmt = _
+    "SELECT " & _
+        "LEFT(a.Toyno, 5) AS ToyNo, " & _
+        "SUM(ISNULL(b.totalCartonsPlan, 0) * a.Qty) AS [Plan], " & _
+        "SUM(ISNULL(c.totalCartonsActual, 0) * a.Qty) AS [Actual] " & _
+    "FROM [MMSBToyDb].[dbo].[Dra6assort] a " & _
+```
+> LEFT() isnt being coloured
+
+```vbscript
+<% If condition Then %>
+```
+> If being highlighted as a warning
