@@ -329,7 +329,12 @@
                     }
                 }
             }
-        ]
+        ],
+        "configurationDefaults": {
+            "[asp]": {
+                "editor.wordBasedSuggestions": "off"
+            }
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",

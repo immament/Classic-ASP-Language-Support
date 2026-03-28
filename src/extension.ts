@@ -95,12 +95,6 @@ async function openFormattingPreview(
 export function activate(context: vscode.ExtensionContext) {
     console.log('Classic ASP Language Support is now active!');
 
-    // Disable word-based suggestions for ASP — all real completions come from
-    // our own providers, and the built-in word scanner picks up SQL identifiers
-    // inside string literals which creates noise.
-    const aspConfig = vscode.workspace.getConfiguration('editor', { languageId: 'asp' });
-    aspConfig.update('wordBasedSuggestions', 'off', vscode.ConfigurationTarget.Global);
-
     addRegionHighlights(context);
     registerCssDiagnostics(context);
     const htmlStructureCollection = registerHtmlStructureDiagnostics(context);
