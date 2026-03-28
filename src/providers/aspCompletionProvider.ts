@@ -3,6 +3,7 @@ import { ASP_OBJECTS, VBSCRIPT_KEYWORDS, VBSCRIPT_FUNCTIONS } from '../constants
 import { getContext, ContextType, getTextBeforeCursor } from '../utils/documentHelper';
 import { collectAllSymbols } from './includeProvider';
 import { COM_TYPE_MAP } from '../constants/comObjects';
+import * as path from 'path';
 
 
 // Builds a variable → progId map from the combined symbols collected by
@@ -113,7 +114,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
 
             const item = new vscode.CompletionItem(v.name, vscode.CompletionItemKind.Variable);
             const fromInclude = v.filePath !== document.uri.fsPath;
-            item.detail       = fromInclude ? `Variable (from ${require('path').basename(v.filePath)})` : 'Variable (Dim)';
+            item.detail       = fromInclude ? `Variable (from ${path.basename(v.filePath)})` : 'Variable (Dim)';
             item.documentation = new vscode.MarkdownString(`**${v.name}** — ${fromInclude ? 'included variable' : 'declared in this file'}`);
             item.sortText     = '2_' + v.name;
             item.preselect    = false;
@@ -128,7 +129,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
 
             const item = new vscode.CompletionItem(c.name, vscode.CompletionItemKind.Constant);
             const fromInclude = c.filePath !== document.uri.fsPath;
-            item.detail       = `Const = ${c.value}${fromInclude ? ` (from ${require('path').basename(c.filePath)})` : ''}`;
+            item.detail       = `Const = ${c.value}${fromInclude ? ` (from ${path.basename(c.filePath)})` : ''}`;
             item.documentation = new vscode.MarkdownString(`**${c.name}** = \`${c.value}\``);
             item.sortText     = '2_' + c.name;
             item.preselect    = false;
@@ -174,7 +175,7 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             ).join(', ');
 
             const item = new vscode.CompletionItem(fn.name, vscode.CompletionItemKind.Function);
-            item.detail = `${fn.kind} ${fn.name}${hasParams ? `(${fn.params})` : ''}${fromInclude ? ` — from ${require('path').basename(fn.filePath)}` : ''}`;
+            item.detail = `${fn.kind} ${fn.name}${hasParams ? `(${fn.params})` : ''}${fromInclude ? ` — from ${path.basename(fn.filePath)}` : ''}`;
             item.documentation = new vscode.MarkdownString(
                 `**${fn.name}** — ${fromInclude ? 'included' : 'defined in this file'}\n\n` +
                 `\`${fn.kind} ${fn.name}${hasParams ? `(${fn.params})` : ''}\``
@@ -221,8 +222,8 @@ export class AspCompletionProvider implements vscode.CompletionItemProvider {
             const fromInclude = cv.filePath !== document.uri.fsPath;
             const item = new vscode.CompletionItem(cv.name, vscode.CompletionItemKind.Variable);
             item.detail       = typeDef
-                ? `${typeDef.label}${fromInclude ? ` (from ${require('path').basename(cv.filePath)})` : ''}`
-                : `Object${fromInclude ? ` (from ${require('path').basename(cv.filePath)})` : ''}`;
+                ? `${typeDef.label}${fromInclude ? ` (from ${path.basename(cv.filePath)})` : ''}`
+                : `Object${fromInclude ? ` (from ${path.basename(cv.filePath)})` : ''}`;
             item.documentation = typeDef
                 ? new vscode.MarkdownString(`**${cv.name}** — \`${typeDef.label}\`\n\nType \`${cv.name}.\` to see members.`)
                 : new vscode.MarkdownString(`**${cv.name}** — COM object variable`);
