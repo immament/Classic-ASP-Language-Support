@@ -79,6 +79,97 @@ const KEYWORD_DOCS: Record<string, string> = {
     'option explicit': '**Option Explicit** — Forces all variables to be declared with `Dim`. Recommended to prevent typo bugs.',
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Built-in VBScript function hover docs
+// ─────────────────────────────────────────────────────────────────────────────
+const BUILTIN_FUNCTION_DOCS: Record<string, string> = {
+    'abs':             '**Abs(number)** — Returns the absolute value of a number.',
+    'array':           '**Array(arglist)** — Returns a Variant containing an array.',
+    'asc':             '**Asc(string)** — Returns the ANSI character code of the first character in a string.',
+    'atn':             '**Atn(number)** — Returns the arctangent of a number (in radians).',
+    'cbool':           '**CBool(expression)** — Converts an expression to a Boolean.',
+    'cbyte':           '**CByte(expression)** — Converts an expression to a Byte.',
+    'ccur':            '**CCur(expression)** — Converts an expression to Currency.',
+    'cdate':           '**CDate(expression)** — Converts an expression to a Date.',
+    'cdbl':            '**CDbl(expression)** — Converts an expression to a Double.',
+    'chr':             '**Chr(charcode)** — Returns the character associated with an ANSI character code.',
+    'cint':            '**CInt(expression)** — Converts an expression to an Integer.',
+    'clng':            '**CLng(expression)** — Converts an expression to a Long.',
+    'cos':             '**Cos(number)** — Returns the cosine of an angle (in radians).',
+    'createobject':    '**CreateObject(servername.typename)** — Creates and returns a reference to an Automation object.',
+    'csng':            '**CSng(expression)** — Converts an expression to a Single.',
+    'cstr':            '**CStr(expression)** — Converts an expression to a String.',
+    'date':            '**Date()** — Returns the current system date.',
+    'dateadd':         '**DateAdd(interval, number, date)** — Returns a date to which a specified time interval has been added.',
+    'datediff':        '**DateDiff(interval, date1, date2)** — Returns the number of intervals between two dates.',
+    'datepart':        '**DatePart(interval, date)** — Returns the specified part of a given date.',
+    'dateserial':      '**DateSerial(year, month, day)** — Returns a Variant of subtype Date for a specified year, month, and day.',
+    'datevalue':       '**DateValue(date)** — Returns a Variant of subtype Date.',
+    'day':             '**Day(date)** — Returns a whole number between 1 and 31 representing the day of the month.',
+    'exp':             '**Exp(number)** — Returns e (the base of natural logarithms) raised to a power.',
+    'filter':          '**Filter(InputStrings, Value[, Include[, Compare]])** — Returns a zero-based array containing a subset of a string array.',
+    'fix':             '**Fix(number)** — Returns the integer portion of a number (truncates toward zero).',
+    'formatcurrency':  '**FormatCurrency(Expression[, ...])** — Returns an expression formatted as a currency value.',
+    'formatdatetime':  '**FormatDateTime(Date[, NamedFormat])** — Returns an expression formatted as a date or time.',
+    'formatnumber':    '**FormatNumber(Expression[, ...])** — Returns an expression formatted as a number.',
+    'formatpercent':   '**FormatPercent(Expression[, ...])** — Returns an expression formatted as a percentage.',
+    'getobject':       '**GetObject([pathname[, class]])** — Returns a reference to an object provided by an Automation component.',
+    'hex':             '**Hex(number)** — Returns a string representing the hexadecimal value of a number.',
+    'hour':            '**Hour(time)** — Returns a whole number between 0 and 23 representing the hour of the day.',
+    'inputbox':        '**InputBox(prompt[, title[, default]])** — Displays a prompt in a dialog box and returns the text entered.',
+    'instr':           '**InStr([start, ]string1, string2[, compare])** — Returns the position of one string within another.',
+    'instrrev':        '**InStrRev(string1, string2[, start[, compare]])** — Returns the position of a string within another, from the end.',
+    'int':             '**Int(number)** — Returns the integer portion of a number (rounds down).',
+    'isarray':         '**IsArray(varname)** — Returns True if the variable is an array.',
+    'isdate':          '**IsDate(expression)** — Returns True if the expression can be converted to a date.',
+    'isempty':         '**IsEmpty(expression)** — Returns True if the variable is uninitialized.',
+    'isnull':          '**IsNull(expression)** — Returns True if the expression is Null.',
+    'isnumeric':       '**IsNumeric(expression)** — Returns True if the expression can be evaluated as a number.',
+    'isobject':        '**IsObject(expression)** — Returns True if the expression references a valid object.',
+    'join':            '**Join(list[, delimiter])** — Returns a string created by joining substrings in an array.',
+    'lbound':          '**LBound(arrayname[, dimension])** — Returns the smallest subscript for the indicated dimension of an array.',
+    'lcase':           '**LCase(string)** — Returns a string converted to lowercase.',
+    'left':            '**Left(string, length)** — Returns a specified number of characters from the left side of a string.',
+    'len':             '**Len(string | varname)** — Returns the number of characters in a string or bytes required to store a variable.',
+    'log':             '**Log(number)** — Returns the natural logarithm of a number.',
+    'ltrim':           '**LTrim(string)** — Returns a copy of a string without leading spaces.',
+    'mid':             '**Mid(string, start[, length])** — Returns a specified number of characters from a string.',
+    'minute':          '**Minute(time)** — Returns a whole number between 0 and 59 representing the minute of the hour.',
+    'month':           '**Month(date)** — Returns a whole number between 1 and 12 representing the month of the year.',
+    'monthname':       '**MonthName(month[, abbreviate])** — Returns a string indicating the specified month.',
+    'msgbox':          '**MsgBox(prompt[, buttons[, title]])** — Displays a message in a dialog box and returns a value indicating which button was clicked.',
+    'now':             '**Now()** — Returns the current system date and time.',
+    'oct':             '**Oct(number)** — Returns a string representing the octal value of a number.',
+    'replace':         '**Replace(expression, find, replacewith[, start[, count[, compare]]])** — Returns a string with a substring replaced.',
+    'rgb':             '**RGB(red, green, blue)** — Returns a whole number representing an RGB colour value.',
+    'right':           '**Right(string, length)** — Returns a specified number of characters from the right side of a string.',
+    'rnd':             '**Rnd([number])** — Returns a random number between 0 and 1.',
+    'round':           '**Round(expression[, numdecimalplaces])** — Returns a number rounded to a specified number of decimal places.',
+    'rtrim':           '**RTrim(string)** — Returns a copy of a string without trailing spaces.',
+    'second':          '**Second(time)** — Returns a whole number between 0 and 59 representing the second of the minute.',
+    'sgn':             '**Sgn(number)** — Returns an integer indicating the sign of a number.',
+    'sin':             '**Sin(number)** — Returns the sine of an angle (in radians).',
+    'space':           '**Space(number)** — Returns a string consisting of the specified number of spaces.',
+    'split':           '**Split(expression[, delimiter[, count[, compare]]])** — Returns a zero-based array of substrings.',
+    'sqr':             '**Sqr(number)** — Returns the square root of a number.',
+    'strcomp':         '**StrComp(string1, string2[, compare])** — Returns a value indicating the result of a string comparison.',
+    'string':          '**String(number, character)** — Returns a repeating character string of the length specified.',
+    'strreverse':      '**StrReverse(string)** — Returns the reverse of a string.',
+    'tan':             '**Tan(number)** — Returns the tangent of an angle (in radians).',
+    'time':            '**Time()** — Returns the current system time.',
+    'timer':           '**Timer()** — Returns the number of seconds elapsed since midnight.',
+    'timeserial':      '**TimeSerial(hour, minute, second)** — Returns a Variant of subtype Date containing the time for a specific hour, minute, and second.',
+    'timevalue':       '**TimeValue(time)** — Returns a Variant of subtype Date containing the time.',
+    'trim':            '**Trim(string)** — Returns a copy of a string without leading or trailing spaces.',
+    'typename':        '**TypeName(varname)** — Returns a string that describes the subtype of a variable.',
+    'ubound':          '**UBound(arrayname[, dimension])** — Returns the largest available subscript for the indicated dimension of an array.',
+    'ucase':           '**UCase(string)** — Returns a string converted to uppercase.',
+    'vartype':         '**VarType(varname)** — Returns a value indicating the subtype of a variable.',
+    'weekday':         '**Weekday(date[, firstdayofweek])** — Returns a whole number representing the day of the week.',
+    'weekdayname':     '**WeekdayName(weekday[, abbreviate[, firstdayofweek]])** — Returns a string indicating the specified day of the week.',
+    'year':            '**Year(date)** — Returns a whole number representing the year.',
+};
+
 // 3-word compound keyword sequences — checked before 2-word compounds.
 // Each entry maps the lowercase 3-word key to the KEYWORD_DOCS key to use.
 const THREE_WORD_COMPOUNDS: Record<string, string> = {
@@ -256,7 +347,13 @@ export class AspHoverProvider implements vscode.HoverProvider {
             );
         }
 
-        // ── 6. VBScript keywords — only inside <% %> blocks ──────────────────
+        // ── 6. Built-in VBScript function hover ─────────────────────────────────
+        // Show docs for built-in functions like Split(), InStr(), DateDiff(), etc.
+        if (BUILTIN_FUNCTION_DOCS[wordKey]) {
+            return new vscode.Hover(new vscode.MarkdownString(BUILTIN_FUNCTION_DOCS[wordKey]));
+        }
+
+        // ── 7. VBScript keywords — only inside <% %> blocks ──────────────────
         // Keyword docs are VBScript-specific so we suppress them inside <script>.
         if (context !== 'vbscript') return null;
 
