@@ -5,6 +5,44 @@ All notable changes to the "Classic ASP Language Support" extension will be docu
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-29
+
+### ✨ Added
+- **Workspace symbol search** - Press `Ctrl+T` to search across all `.asp` and `.inc` files
+- **Document symbol provider** - Outline panel and breadcrumb navigation for VBScript
+- **Rename across workspace** - `F2` updates symbols in all workspace files
+- **Signature help** - Parameter hints when calling VBScript functions
+- **Built-in VBScript function hover** - Documentation for all built-in functions (Split, InStr, DateDiff, etc.)
+- **User-defined JS completions** - Suggestions for variables/functions in `<script>` blocks
+- **CSS validation in inline styles** - Error checking for CSS in `style=""` attributes
+- **CSS hover in inline styles** - Hover documentation for CSS in `style=""` attributes
+- **Option Explicit support** - Respects declaration and suppresses implicit variable tracking
+- **Property block validation** - Error checking for missing `End Property`
+- **For Each loop variable extraction** - Loop variables appear in completions
+- **Virtual include path resolution** - Configurable via `aspLanguageSupport.virtualRoot`
+- **Formatter progress notification** - Progress indicator for large files
+- **Auto-close single quotes** - Works in HTML/CSS/JS zones (not VBScript)
+- **Improved attribute completion** - Immediate suggestions after space in HTML tags
+- **Community health files** - CODE_OF_CONDUCT, CONTRIBUTING, SECURITY, PR template
+
+### 🛠️ Fixed
+- **Fixed recursive include resolution** - Nested includes now resolve correctly
+- **Fixed chained COM object inference** - Accurate type tracking through method chains
+- **Fixed COM object type tracking** - Unified inference with symbol extraction
+- **Fixed hover context detection** - Robust ASP block detection
+- **Fixed snippet suppression** - All block types suppressed after `End` keyword
+- **Fixed LEFT/RIGHT SQL functions** - Proper colouring when followed by `(`
+- **Fixed SQL string concatenation** - Bridges variable gaps for proper colouring
+- **Fixed word-based suggestions** - Properly scoped to ASP only
+- **Fixed inline require() calls** - Proper top-level imports
+- **Fixed CreateObject regex** - Preserves ProgID string literals
+- **Cached symbol collection** - Performance improvement via document version caching
+
+### 🔄 Changed
+- **Removed undeclared settings** - Cleaned up `enableHTMLCompletion` and `enableJSCompletion`
+
+---
+
 ## [0.3.7] - 2026-03-21
 
 ### ✨ Added
@@ -260,6 +298,7 @@ First public release focused on Classic ASP code formatting.
 
 ---
 
+[0.4.0]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.4.0
 [0.3.7]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.7
 [0.3.6]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.6
 [0.3.5]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.5
