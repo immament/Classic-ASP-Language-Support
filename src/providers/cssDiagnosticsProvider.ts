@@ -6,7 +6,7 @@
 
 import * as vscode from 'vscode';
 import { getCSSLanguageService, DiagnosticSeverity as LsSeverity } from 'vscode-css-languageservice';
-import { buildCssDoc, getZone } from '../utils/cssUtils';
+import { buildCssDoc, getZone, getInlineStyleContext, buildInlineCssDoc } from '../utils/cssUtils';
 
 const cssService = getCSSLanguageService();
 
@@ -109,6 +109,76 @@ function validateDocument(
 
         if (styleClose === -1) break;
         searchFrom = styleClose + 8;
+    }
+
+    // ── Inline style="" attribute validation ─────────────────────────────────
+    // Scan every line for style="..." attributes and validate the declarations.
+    for (let lineIdx = 0; lineIdx < document.lineCount; lineIdx++) {
+        const lineText   = document.lineAt(lineIdx).text;
+        const lineOffset = document.offsetAt(new vscode.Position(lineIdx, 0));
+
+        // Walk along the line looking for style=" occurrences
+        let searchCol = 0;
+        while (searchCol < lineText.length) {
+            // Find next style= on this line
+            const styleMatch = lineText.slice(searchCol).match(/\bstyle\s*=\s*(["'])/i);
+            if (!styleMatch) break;
+
+            const matchStart  = searchCol + styleMatch.index!;
+            const quoteChar   = styleMatch[1];
+            const valueStart  = matchStart + styleMatch[0].length;
+            const valueEnd    = lineText.indexOf(quoteChar, valueStart);
+            if (valueEnd === -1) break;
+
+            const offset = lineOffset + valueStart;
+
+            // Skip if inside an ASP block or a <style> tag
+            const zone = getZone(content, offset);
+            if (zone === 'css' || zone === 'asp') { searchCol = valueEnd + 1; continue; }
+
+            const inlineCtx = getInlineStyleContext(content, offset);
+            if (!inlineCtx) { searchCol = valueEnd + 1; continue; }
+
+            const lsDoc = buildInlineCssDoc(
+                document.uri.toString(),
+                content,
+                document.version,
+                inlineCtx.valueStart,
+                inlineCtx.valueEnd
+            );
+            const stylesheet   = cssService.parseStylesheet(lsDoc);
+            const lsDiagnostics = cssService.doValidation(lsDoc, stylesheet);
+
+            for (const d of lsDiagnostics) {
+                // Remap positions from the virtual "* { ... }" doc back to the real line.
+                // The virtual doc has a 5-char prefix ("* {  ") so subtract it, then
+                // add back the real valueStart column.
+                const WRAPPER_PREFIX = 5;
+                const realCol = (d.range.start.character - WRAPPER_PREFIX) + (valueStart - lineOffset);
+                if (realCol < 0) continue;
+
+                const start = new vscode.Position(lineIdx, realCol);
+                const end   = new vscode.Position(
+                    lineIdx,
+                    realCol + (d.range.end.character - d.range.start.character)
+                );
+
+                const diagnostic = new vscode.Diagnostic(
+                    new vscode.Range(start, end),
+                    d.message,
+                    mapSeverity(d.severity)
+                );
+                diagnostic.source = 'Classic ASP (inline CSS)';
+                if (d.code !== undefined && d.code !== null) {
+                    diagnostic.code = typeof d.code === 'object'
+                        ? String((d.code as { value: string | number }).value)
+                        : String(d.code);
+                }
+                diagnostics.push(diagnostic);
+            }
+
+            searchCol = valueEnd + 1;
+        }
     }
 
     collection.set(document.uri, diagnostics);
