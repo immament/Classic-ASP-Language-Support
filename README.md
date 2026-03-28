@@ -136,7 +136,7 @@
 | <img src="images/ext-inline-bookmarks.png" height="35"> | [Inline Bookmarks] | ✅ Compatible | In-editor bookmark tracking |
 | <img src="images/ext-http-status-codes.png" width="50"> | [HTTP Status Codes] | ✅ Compatible | HTTP status code reference on hover |
 | <img src="images/ext-asp-html-tag-matcher.png" width="50"> | [ASP HTML Tag Matcher] | ✅ Compatible | Highlights matching HTML tags in ASP files |
-| <img src="images/ext-html-css-support.png" width="50"> | [HTML CSS Support] | ⚠️ Caution | May conflict with built-in HTML completions — test before use |
+| <img src="images/ext-html-css-support.png" width="50"> | [HTML CSS Support] | ⚠️ Caution | May conflict with built-in HTML completions — but may be fine |
 | <img src="images/ext-asp-classic-support.png" width="50"> | [ASP Classic Support] | ❌ Incompatible | Already integrated into this extension |
 | <img src="images/ext-classic-asp-syntaxes.png" width="50"> | [Classic ASP Syntaxes & Snippets] | ❌ Incompatible | Already integrated into this extension |
 
