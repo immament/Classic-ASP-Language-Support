@@ -341,7 +341,13 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
 
     let prettifiedCode: string;
     try {
-        prettifiedCode = await prettier.format(maskedCode, {
+        prettifiedCode = await vscode.window.withProgress(
+            {
+                location:  vscode.ProgressLocation.Notification,
+                title:     'Classic ASP: Formatting…',
+                cancellable: false,
+            },
+            () => prettier.format(maskedCode, {
             parser:                    'html',
             printWidth:                prettierSettings.printWidth,
             tabWidth:                  prettierSettings.tabWidth,
@@ -353,7 +359,8 @@ export async function formatCompleteAspFile(code: string): Promise<string> {
             trailingComma:             prettierSettings.trailingComma             as any,
             endOfLine:                 prettierSettings.endOfLine                 as any,
             htmlWhitespaceSensitivity: prettierSettings.htmlWhitespaceSensitivity as any,
-        });
+        })
+        );
     } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         const lineMatch = msg.match(/\((\d+):(\d+)\)/);
