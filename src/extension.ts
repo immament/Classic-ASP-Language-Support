@@ -16,6 +16,7 @@ import { AspHoverProvider } from './providers/aspHoverProvider';
 import { AspRenameProvider } from './providers/aspRenameProvider';
 import { addRegionHighlights } from './highlight';
 import { AspDocumentSymbolProvider } from './providers/aspDocumentSymbolProvider';
+import { AspSignatureHelpProvider } from './providers/aspSignatureHelpProvider';
 
 // Returns line-level TextEdits instead of replacing the whole document.
 // Only changed line ranges are touched — Ctrl+Z still undoes everything in one step.
@@ -202,6 +203,13 @@ export function activate(context: vscode.ExtensionContext) {
         'asp', new AspDocumentSymbolProvider()
     );
 
+    // ── Signature help (parameter hints on '(' and ',') ─────────────────────
+    const signatureHelpProvider = vscode.languages.registerSignatureHelpProvider(
+        'asp',
+        new AspSignatureHelpProvider(),
+        { triggerCharacters: ['('], retriggerCharacters: [','] }
+    );
+
     // ── Semantic tokens ───────────────────────────────────────────────────────
     // Highlights user-defined function/sub names using VS Code's semantic token API.
     const semanticTokensProviderInstance = new AspSemanticTokensProvider();
@@ -289,6 +297,7 @@ export function activate(context: vscode.ExtensionContext) {
         definitionProvider,
         renameProvider,
         documentSymbolProvider,
+        signatureHelpProvider,
         semanticProvider,
         semanticTokensProviderInstance,
         aspHoverProvider,
