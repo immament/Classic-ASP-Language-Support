@@ -217,11 +217,13 @@ export class HtmlCompletionProvider implements vscode.CompletionItemProvider {
         if (!insideAttrValue && isInsideTagForAttributes(document, position)) {
             const tagName = getCurrentTagName(document, position);
             if (tagName) {
+                // Fire attribute completions on the very first space after the tag
+                // name, on explicit trigger, or when the user is already typing an
+                // attribute name — the old check required at least one character to
+                // be typed after the space which silently suppressed the first trigger.
                 const afterTagName = textBefore.match(/<\w+\s+(.*)$/);
-                if (afterTagName && afterTagName[1].trim().length > 0) {
-                    return getAttributeCompletions(tagName);
-                }
-                if (context.triggerCharacter === ' ') {
+                const hasSpaceAfterTag = afterTagName !== null;
+                if (hasSpaceAfterTag || context.triggerCharacter === ' ') {
                     return getAttributeCompletions(tagName);
                 }
             }
