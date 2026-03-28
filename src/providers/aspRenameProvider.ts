@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { collectAllSymbols, resolveIncludePaths } from './includeProvider';
 import { isInsideAspBlock } from '../utils/aspUtils';
 import { VBSCRIPT_KEYWORDS_SET } from '../constants/aspKeywords';
+import path from 'path';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AspRenameProvider
@@ -90,9 +91,33 @@ export class AspRenameProvider implements vscode.RenameProvider {
             return null;
         }
 
-        // Build the set of files to search: current document + all its includes.
-        // resolveIncludePaths handles circular include guards automatically.
+        // Build the set of files to search: current document + all its includes
+        // + every other .asp / .inc file in the workspace that might reference
+        // this symbol transitively (e.g. a page that includes the file where the
+        // symbol is declared). resolveIncludePaths handles circular guards.
         const includedPaths = resolveIncludePaths(docText, docPath);
+        const includedSet   = new Set<string>([docPath, ...includedPaths].map(p => p.toLowerCase()));
+
+        // Collect all .asp and .inc files in the workspace
+        const workspaceFiles: { fsPath: string; getText: () => string }[] = [];
+        const folders = vscode.workspace.workspaceFolders ?? [];
+        for (const folder of folders) {
+            try {
+                const found = findAspFiles(folder.uri.fsPath);
+                for (const fp of found) {
+                    if (!includedSet.has(fp.toLowerCase())) {
+                        workspaceFiles.push({
+                            fsPath: fp,
+                            getText: () => {
+                                try { return fs.readFileSync(fp, 'utf8'); }
+                                catch { return ''; }
+                            },
+                        });
+                    }
+                }
+            } catch { /* skip unreadable folders */ }
+        }
+
         const filesToSearch: { fsPath: string; getText: () => string }[] = [
             { fsPath: docPath, getText: () => docText },
             ...includedPaths.map(p => ({
@@ -102,6 +127,7 @@ export class AspRenameProvider implements vscode.RenameProvider {
                     catch { return ''; }
                 },
             })),
+            ...workspaceFiles,
         ];
 
         for (const file of filesToSearch) {
@@ -125,6 +151,30 @@ export class AspRenameProvider implements vscode.RenameProvider {
 
         return edit;
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// findAspFiles
+// Recursively walks a directory and returns all .asp and .inc file paths.
+// Skips node_modules and hidden directories for performance.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function findAspFiles(dir: string): string[] {
+    const results: string[] = [];
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
+    catch { return results; }
+
+    for (const entry of entries) {
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') { continue; }
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            results.push(...findAspFiles(fullPath));
+        } else if (entry.isFile() && /\.(asp|inc)$/i.test(entry.name)) {
+            results.push(fullPath);
+        }
+    }
+    return results;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
