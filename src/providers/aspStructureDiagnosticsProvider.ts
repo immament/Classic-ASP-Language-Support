@@ -43,7 +43,7 @@ interface BlockEntry {
 
 type BlockKind =
     | 'if' | 'for' | 'while' | 'do' | 'with'
-    | 'function' | 'sub' | 'select' | 'class';
+    | 'function' | 'sub' | 'select' | 'class' | 'property';
 
 // ── Strip string literals from a line ─────────────────────────────────────────
 
@@ -154,11 +154,11 @@ function classifyLine(raw: string): LineAction[] {
     // ── Closers first (so ElseIf / Else don't leave a phantom open) ───────────
 
     // End If / End Sub / End Function / End With / End Select / End Class
-    const endMatch = lower.match(/^end\s+(if|sub|function|with|select|class)\b/);
+    const endMatch = lower.match(/^end\s+(if|sub|function|with|select|class|property)\b/);
     if (endMatch) {
         const kindMap: Record<string, BlockKind> = {
             if: 'if', sub: 'sub', function: 'function',
-            with: 'with', select: 'select', class: 'class',
+            with: 'with', select: 'select', class: 'class', property: 'property',
         };
         const k = kindMap[endMatch[1]];
         actions.push({ type: 'close', kind: k, closer: `End ${endMatch[1].charAt(0).toUpperCase() + endMatch[1].slice(1)}`, colOffset: 0 });
@@ -259,6 +259,13 @@ function classifyLine(raw: string): LineAction[] {
     if (/\bsub\b\s+\w+/.test(lower) && !/^\s*end\s+sub\b/.test(lower)) {
         const col = raw.toLowerCase().search(/\bsub\b/);
         actions.push({ type: 'open', kind: 'sub', opener: 'Sub', colOffset: col });
+        return actions;
+    }
+
+    // Property Get / Let / Set
+    if (/\bproperty\s+(get|let|set)\b/.test(lower) && !/^\s*end\s+property\b/.test(lower)) {
+        const col = raw.toLowerCase().search(/\bproperty\b/);
+        actions.push({ type: 'open', kind: 'property', opener: 'Property', colOffset: col });
         return actions;
     }
 
@@ -397,6 +404,7 @@ function closerFor(kind: BlockKind): string {
         case 'sub':      return 'End Sub';
         case 'select':   return 'End Select';
         case 'class':    return 'End Class';
+        case 'property': return 'End Property';
     }
 }
 
