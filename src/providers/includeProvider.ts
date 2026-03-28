@@ -124,6 +124,15 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
             });
         }
 
+        // For Each loop variable  e.g.  For Each item In collection
+        const forEachMatch = lineNoComment.match(/^\s*For\s+Each\s+(\w+)\s+In\b/i);
+        if (forEachMatch) {
+            const name = forEachMatch[1];
+            if (!result.variables.some(v => v.name.toLowerCase() === name.toLowerCase())) {
+                result.variables.push({ name, line: lineIndex, filePath });
+            }
+        }
+
         // Implicit assignment (undeclared variables, no Option Explicit)
         // Skipped entirely when Option Explicit is present — in that mode every
         // real variable must be Dim'd, so implicit assignments are either already
