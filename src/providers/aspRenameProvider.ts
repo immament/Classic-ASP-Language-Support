@@ -186,36 +186,75 @@ function escapeRegex(s: string): string {
 
 /**
  * Builds a Uint8Array where aspMap[i] === 1 means offset i is inside <% %>.
- * Ignores VBScript string contents and comments intentionally — we only need
- * the block boundaries here; the string/comment check is done separately per match.
+ *
+ * Mirrors the line-by-line logic of isInsideAspBlock in aspUtils.ts so that:
+ *   - %> inside a VBScript comment line (') is NOT treated as a block close
+ *   - %> inside a string literal ("...") is NOT treated as a block close
+ *   - HTML comments (<!-- ... -->) prevent <% from opening a block
  */
 function buildAspMap(text: string): Uint8Array {
-    const map    = new Uint8Array(text.length);
-    let inside   = false;
+    const map  = new Uint8Array(text.length);
+    let i      = 0;
+    let inside = false;
 
-    for (let i = 0; i < text.length; i++) {
+    while (i < text.length) {
         if (!inside) {
+            // Skip HTML comments — <% inside <!-- --> is not real ASP
+            if (text.slice(i, i + 4) === '<!--') {
+                const closeIdx = text.indexOf('-->', i + 4);
+                i = closeIdx === -1 ? text.length : closeIdx + 3;
+                continue;
+            }
             if (text[i] === '<' && text[i + 1] === '%') {
                 inside = true;
-                // Mark the <% delimiters themselves as ASP so isInsideAspBlock
-                // semantics are preserved — our caller checks map[match.index],
-                // which will be a real identifier at least 1 char inside the block.
                 map[i] = 1; map[i + 1] = 1;
+                i += 2;
+            } else {
                 i++;
             }
         } else {
-            if (text[i] === '%' && text[i + 1] === '>') {
-                inside = false;
-                i++;
-            } else {
-                map[i] = 1;
+            // Process line-by-line so VBScript comment lines are handled correctly
+            const lineEnd = text.indexOf('\n', i);
+            const end     = lineEnd === -1 ? text.length : lineEnd + 1;
+            let j         = i;
+            let inStr     = false;
+            let found     = false;
+
+            while (j < end) {
+                const ch = text[j];
+                if (inStr) {
+                    if (ch === '"') {
+                        if (j + 1 < end && text[j + 1] === '"') { j += 2; continue; }
+                        inStr = false;
+                    }
+                    map[j] = 1; j++;
+                    continue;
+                }
+                if (ch === '"') { inStr = true; map[j] = 1; j++; continue; }
+
+                // VBScript comment — scan only for %> to close the block
+                if (ch === "'") {
+                    while (j < end) {
+                        if (text[j] === '%' && j + 1 < text.length && text[j + 1] === '>') {
+                            inside = false; i = j + 2; found = true; break;
+                        }
+                        map[j] = 1; j++;
+                    }
+                    if (!found) { i = end; found = true; }
+                    break;
+                }
+
+                if (ch === '%' && j + 1 < text.length && text[j + 1] === '>') {
+                    inside = false; i = j + 2; found = true; break;
+                }
+                map[j] = 1; j++;
             }
+            if (!found) { i = end; }
         }
     }
 
     return map;
 }
-
 /**
  * Returns true when `lineSlice` (the text from line start up to but not
  * including the token) indicates the token is inside a string literal or
