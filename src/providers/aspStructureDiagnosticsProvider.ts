@@ -309,8 +309,11 @@ function scanAspStructure(document: vscode.TextDocument): vscode.Diagnostic[] {
         const lineText = logical.text;
         const lineOffset = document.offsetAt(new vscode.Position(li, 0));
 
-        // Only process lines that are (at least partially) inside an ASP block.
-        const midOffset = lineOffset + Math.floor(physicalLines[li].length / 2);
+        // Find a reliable offset inside the ASP block by locating <% on this line
+        const rawLine  = physicalLines[li];
+        const aspOpenIdx = rawLine.indexOf('<%');
+        const probeCol   = aspOpenIdx !== -1 ? aspOpenIdx + 2 : Math.floor(rawLine.length / 2);
+        const midOffset  = lineOffset + probeCol;
         if (!isInsideAspBlock(text, midOffset)) { continue; }
 
         const trimmed = lineText.trimStart();
