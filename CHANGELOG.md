@@ -174,7 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.5] - 2025-02-12
+## [0.2.5] - 2026-02-12
 
 ### ✨ Added
 - **Added colours for advanced SQL syntaxes** - Enhanced syntax highlighting for advanced SQL patterns and keywords ([#11](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/11))
@@ -190,7 +190,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.3] - 2025-02-03
+## [0.2.3] - 2026-02-03
 
 ### 🛠️ Fixed
 - **Fixed `ElseIf` formatting** - `ElseIf` keywords now maintain correct casing instead of being converted to `Elseif` ([#1](https://github.com/ashtonckj/Classic-ASP-Language-Support/issues/1))
@@ -201,7 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.2] - 2025-02-02
+## [0.2.2] - 2026-02-02
 
 ### 🛠️ Fixed
 - **Fixed ASP code colour highlighting** - Resolved broken colours for ASP code blocks across different VS Code themes
@@ -212,7 +212,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.1] - 2025-02-01
+## [0.2.1] - 2026-02-01
 
 ### ✨ Added
 - **Enhanced SQL syntax colouring** with comprehensive highlighting for SQL keywords, functions, data types, operators, and multi-word phrases
@@ -223,7 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.0-beta] - 2025-02-01
+## [0.2.0-beta] - 2026-02-01
 
 ### ✨ Added
 - **ASP region highlighting** with customisable colours for light/dark themes
@@ -239,7 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.0-alpha] - 2025-01-27
+## [0.2.0-alpha] - 2026-01-27
 
 ### ✨ Added
 
@@ -267,7 +267,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.0-alpha] - 2025-01-23
+## [0.1.0-alpha] - 2026-01-23
 
 ### 🎉 Initial Release
 
