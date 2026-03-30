@@ -5,6 +5,22 @@ All notable changes to the "Classic ASP Language Support" extension will be docu
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-03-31
+
+### ✨ Added
+- **Improved VBScript function explanations** - More detailed hover documentation for complex built-in functions
+
+### 🛠️ Fixed
+
+- **Fixed extra newline insertion** - Removed unintended next-line character
+- **Fixed Abs() function colouring** - Proper syntax highlighting for VBScript `Abs()`
+- **Fixed missing const values in hover** - Constants now appear correctly in ASP hover
+- **Fixed false warning at column 0** - Statements on same line as ASP tags no longer trigger warnings
+- **Fixed indentation warning issue** - VBScript statements no longer warn on deeper indentation
+- **Fixed incorrect year values** - Corrected year-related inaccuracies
+
+---
+
 ## [0.4.0] - 2026-03-29
 
 ### ✨ Added
@@ -298,6 +314,7 @@ First public release focused on Classic ASP code formatting.
 
 ---
 
+[0.4.0]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.4.1
 [0.4.0]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.4.0
 [0.3.7]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.7
 [0.3.6]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.3.6
