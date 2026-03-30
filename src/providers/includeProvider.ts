@@ -152,8 +152,10 @@ export function extractSymbols(text: string, filePath: string): FileSymbols {
             }
         }
 
-        // Const
-        const constMatch = lineNoComment.match(/^\s*(?:Public\s+|Private\s+)?Const\s+(\w+)\s*=\s*(.+?)\s*(?:'.*)?$/i);
+        // Const — run on the original line so string values are preserved.
+        // Strip only a trailing comment (but not string contents).
+        const lineForConst = line.replace(/'(?:[^"']|"[^"]*")*$/, '').trimEnd();
+        const constMatch = lineForConst.match(/^\s*(?:Public\s+|Private\s+)?Const\s+(\w+)\s*=\s*(.+?)\s*$/i);
         if (constMatch) {
             result.constants.push({
                 name:  constMatch[1],
