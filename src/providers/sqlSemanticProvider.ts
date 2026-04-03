@@ -72,13 +72,18 @@ const ENGLISH_ARTICLES = /^(the|a|an|this|that|these|those|my|your|our|their|its
 export function isSql(text: string): boolean {
     if (!SQL_VERBS.test(text) || !SQL_CLAUSES.test(text)) { return false; }
 
+    // Strip SQL single-quoted string literals before applying prose guards.
+    // This prevents content like 'TOOL_ID:' or 'TOOL_INFO' inside SQL string
+    // parameters from triggering the colon/period guards.
+    const textNoStrings = text.replace(/'(?:[^']|'')*'/g, m => ' '.repeat(m.length));
+
     // Guard: a period that is NOT between two word characters (i.e. not a.b dot notation)
     // AND NOT between ] and [ (i.e. not [db].[schema].[table] bracket notation)
     // appearing BEFORE the first SQL clause keyword means this is a sentence, not SQL.
     // e.g. "Daily total hours (12 hrs) exceeds limit. Base: ..." has a prose period.
-    const firstClauseMatch = SQL_CLAUSES.exec(text);
+    const firstClauseMatch = SQL_CLAUSES.exec(textNoStrings);
     if (firstClauseMatch) {
-        const beforeClause = text.slice(0, firstClauseMatch.index);
+        const beforeClause = textNoStrings.slice(0, firstClauseMatch.index);
         if (/(?<![\w\]])\.|\.(?![\w\[*])/.test(beforeClause)) { return false; }
     }
 
@@ -86,11 +91,11 @@ export function isSql(text: string): boolean {
     // (time like 7:30), ( or / means this is an error/label string, not SQL.
     // Real SQL strings never contain word: patterns outside of string literals.
     // e.g. "Delete from OT_Authorise failed: " — the trailing colon gives it away.
-    if (/\w\s*:(?!\s*[\d/()])/.test(text)) { return false; }
+    if (/\w\s*:(?!\s*[\d/()])/.test(textNoStrings)) { return false; }
 
-    const fromMatch = text.match(/\bFROM\s+(\w+)/i);
+    const fromMatch = textNoStrings.match(/\bFROM\s+(\w+)/i);
     if (fromMatch && ENGLISH_ARTICLES.test(fromMatch[1])) {
-        const withoutFrom = text.replace(/\bFROM\s+\w+/gi, '');
+        const withoutFrom = textNoStrings.replace(/\bFROM\s+\w+/gi, '');
         if (!SQL_CLAUSES.test(withoutFrom)) { return false; }
     }
     return true;

@@ -185,11 +185,17 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                     stitchedValue = lits.join(' ');
                 }
             } else {
-                // No string literal on the assignment line itself — the RHS may start
-                // with a function call like BuildBOMCTE(...) & _ followed by string
-                // literals on continuation lines. Walk forward to find the first quote.
+                // No string literal on the assignment line itself — the RHS may be:
+                //   (a) a function call like BuildBOMCTE(...) & _  (has & before _)
+                //   (b) a plain line continuation: dataStmt = _    (just = then _)
+                // Both patterns continue on the next line(s) with string literals.
                 const rhsTrimmed = lineText.trimEnd();
-                if (rhsTrimmed.endsWith('_') && rhsTrimmed.slice(0, -1).trimEnd().endsWith('&')) {
+                const endsWithContinuation = rhsTrimmed.endsWith('_');
+                const hasAmpersandBeforeUnderscore = rhsTrimmed.slice(0, -1).trimEnd().endsWith('&');
+                // Also accept: assignment RHS is just `_` (i.e. the value starts on next line)
+                const isPlainContinuation = endsWithContinuation && !hasAmpersandBeforeUnderscore &&
+                    /=\s*_\s*$/.test(rhsTrimmed);
+                if (endsWithContinuation && (hasAmpersandBeforeUnderscore || isPlainContinuation)) {
                     for (let scanLi = li + 1; scanLi < lineCount; scanLi++) {
                         const scanText  = lineTextCache[scanLi];
                         const scanQuote = scanText.indexOf('"');
