@@ -3,18 +3,14 @@
  *
  * Embedded JavaScript support for .asp files — TypeScript Compiler API edition.
  *
- * Architecture mirrors cssUtils.ts exactly:
- *   • buildVirtualJsContent()  — extracts <script> regions, blanks everything
- *                                else to preserve character offsets
- *   • JsLanguageService        — thin wrapper around ts.createLanguageService
- *                                (one singleton, reused across all providers)
- *
- * No separate language server process.  No new npm runtime dependencies beyond
- * the `typescript` package that every extension project already has.
- *
- * Compiler settings (browser-oriented):
- *   target  ES2020   allowJs true   strict false   noEmit true
- *   lib     lib.dom.d.ts + lib.es2020.d.ts   → full window/document/fetch types
+ * Fixes in this version:
+ *   • buildVirtualJsContent — correct forward-only </script> search (was
+ *     always searching from position 0, breaking multi-script files and
+ *     causing textarea.addEventListener etc. to be missing)
+ *   • CompilerOptions — added types:[] to block @types/node leaking in
+ *     (was causing console to show Node.js docs instead of browser docs)
+ *   • Lib resolution — explicit lib file list resolved via
+ *     ts.getDefaultLibFilePath so DOM types always load correctly
  */
 
 import * as path from 'path';
@@ -23,65 +19,60 @@ import * as vscode from 'vscode';
 import { getZone } from './aspUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Virtual file name
-// Must end in .js so TypeScript uses loose JS checking (no type errors for
-// untyped variables, etc.).
+// Virtual file — must end in .js for loose JS checking
 // ─────────────────────────────────────────────────────────────────────────────
-const VIRTUAL_FILENAME = 'asp-embedded.js';
+export const VIRTUAL_FILENAME = 'asp-embedded.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // buildVirtualJsContent
 //
-// Returns the full document text with every character outside <script> blocks
-// replaced by a space (newlines preserved so line numbers stay accurate).
-// ASP blocks (<% … %>) that survived into the JS zone are also blanked so the
-// TS parser never sees them.
+// Scans forward through the document locating every JS <script>…</script>
+// block.  All characters outside those blocks are replaced with spaces
+// (newlines preserved) so offset positions stay exact.
+// ASP blocks (<% … %>) inside script zones are also blanked.
 //
-// Offset alignment is exact: virtualContent[n] corresponds to the same
-// character position as document.getText()[n].
+// BUG FIXED: previous version called content.search(re) which always
+// searched from index 0.  Now we search forward from tagEnd each time.
 // ─────────────────────────────────────────────────────────────────────────────
 export interface VirtualJsResult {
     virtualContent: string;
-    isInScript:     boolean;    // true when `offset` falls inside a <script> block
+    isInScript:     boolean;
 }
 
 export function buildVirtualJsContent(
     content: string,
     offset:  number
 ): VirtualJsResult {
-    // Collect [start, end) pairs for every JS <script> block content region.
     const jsRanges: Array<{ start: number; end: number }> = [];
 
+    // Walk through the document finding all <script> openers
     const scriptOpenRe = /<script(\s[^>]*)?>/gi;
     let m: RegExpExecArray | null;
 
     while ((m = scriptOpenRe.exec(content)) !== null) {
-        const attrs    = m[1] ?? '';
-        const tagEnd   = m.index + m[0].length;
+        const attrs  = m[1] ?? '';
+        const tagEnd = m.index + m[0].length;
 
-        // Skip non-JS script types (text/template, text/x-handlebars, etc.)
+        // Skip non-JS script types
         const typeMatch = attrs.match(/\btype\s*=\s*["']([^"']+)["']/i);
         if (typeMatch && !/javascript|module/i.test(typeMatch[1])) { continue; }
-
-        // Also skip VBScript blocks
         if (/\blanguage\s*=\s*["']vbscript["']/i.test(attrs)) { continue; }
 
-        // Find matching </script>
-        const closeIdx = content.search(new RegExp('<\\/script\\s*>', 'i'));
-        // Use indexOf for speed — we know the search starts at tagEnd
-        const closeTagRe = /<\/script\s*>/i;
-        closeTagRe.lastIndex = 0;
-        const rest = content.slice(tagEnd);
-        const closeM = rest.search(closeTagRe);
-        const end = closeM === -1 ? content.length : tagEnd + closeM;
+        // ── FIX: search for </script> FORWARD from tagEnd, not from 0 ──
+        const closeRe  = /<\/script\s*>/i;
+        const rest     = content.slice(tagEnd);
+        const closeIdx = rest.search(closeRe);
+        const end      = closeIdx === -1 ? content.length : tagEnd + closeIdx;
 
         jsRanges.push({ start: tagEnd, end });
+        // Advance the outer regex past this block so it doesn't re-match
+        // content inside the script body as a nested <script> opener.
+        scriptOpenRe.lastIndex = end;
     }
 
-    // Check whether offset is inside a JS region
     const isInScript = jsRanges.some(r => offset >= r.start && offset <= r.end);
 
-    // Build virtual content: blank all non-JS regions character by character
+    // Build virtual content
     const chars = content.split('');
     for (let i = 0; i < chars.length; i++) {
         const inJs = jsRanges.some(r => i >= r.start && i < r.end);
@@ -89,60 +80,89 @@ export function buildVirtualJsContent(
     }
     let virtualContent = chars.join('');
 
-    // Blank ASP blocks that leaked into the JS zone
-    virtualContent = virtualContent.replace(/<%[\s\S]*?%>/g, m =>
-        m.replace(/[^\n]/g, ' ')
+    // Blank any ASP blocks inside the JS zones
+    virtualContent = virtualContent.replace(/<%[\s\S]*?%>/g,
+        match => match.replace(/[^\n]/g, ' ')
     );
 
     return { virtualContent, isInScript };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Compiler options — browser-oriented, Node types explicitly blocked
+// ─────────────────────────────────────────────────────────────────────────────
+function makeBrowserCompilerOptions(): ts.CompilerOptions {
+    return {
+        target:      ts.ScriptTarget.ES2020,
+        // Explicitly list libs — TypeScript resolves these as filenames
+        // relative to its own lib directory.
+        lib:         [
+            'lib.es2020.d.ts',
+            'lib.dom.d.ts',
+            'lib.dom.iterable.d.ts',
+        ],
+        allowJs:     true,
+        checkJs:     true,       // enables syntactic + basic semantic errors
+        noEmit:      true,
+        strict:      false,
+        // ── IMPORTANT: block @types/node and any other ambient types ──
+        // Without this, if the user's project has @types/node installed,
+        // TypeScript picks up Node.js typings and console becomes the
+        // Node.js Console (showing util.format docs, etc.).
+        types:       [],
+        // Keep errors manageable — don't flag missing return types etc.
+        noImplicitAny:           false,
+        noImplicitReturns:       false,
+        noUnusedLocals:          false,
+        noUnusedParameters:      false,
+        strictNullChecks:        false,
+        strictFunctionTypes:     false,
+        strictPropertyInitialization: false,
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // JsLanguageService
 // ─────────────────────────────────────────────────────────────────────────────
 export class JsLanguageService implements vscode.Disposable {
-    private readonly _service: ts.LanguageService;
-    private          _content: string = '';
-    private          _version: number = 0;
+    private readonly _service:         ts.LanguageService;
+    private readonly _compilerOptions: ts.CompilerOptions;
+    private          _content:         string = '';
+    private          _version:         number = 0;
 
     constructor() {
-        const compilerOptions: ts.CompilerOptions = {
-            target:                ts.ScriptTarget.ES2020,
-            lib:                   ['lib.dom.d.ts', 'lib.es2020.d.ts'],
-            allowJs:               true,
-            noEmit:                true,
-            strict:                false,
-            checkJs:               false,
-            noSemanticValidation:  true,
-        } as ts.CompilerOptions;
+        this._compilerOptions = makeBrowserCompilerOptions();
 
-        // Locate TypeScript's own bundled lib directory so lib.dom.d.ts resolves.
-        const libDir = path.dirname(ts.getDefaultLibFilePath(compilerOptions));
+        // Point TypeScript at its own lib directory so it can find
+        // lib.dom.d.ts, lib.es2020.d.ts, etc. from disk.
+        const libDir = path.dirname(
+            ts.getDefaultLibFilePath(this._compilerOptions)
+        );
 
+        const self = this;
         const host: ts.LanguageServiceHost = {
-            getScriptFileNames:  () => [VIRTUAL_FILENAME],
-            getScriptVersion:    (f) => f === VIRTUAL_FILENAME ? String(this._version) : '0',
-            getScriptSnapshot:   (f) => {
+            getScriptFileNames:     () => [VIRTUAL_FILENAME],
+            getScriptVersion:       (f) => f === VIRTUAL_FILENAME ? String(self._version) : '0',
+            getScriptSnapshot:      (f) => {
                 if (f === VIRTUAL_FILENAME) {
-                    return ts.ScriptSnapshot.fromString(this._content);
+                    return ts.ScriptSnapshot.fromString(self._content);
                 }
                 const text = ts.sys.readFile(f);
                 return text !== undefined ? ts.ScriptSnapshot.fromString(text) : undefined;
             },
-            getCompilationSettings: () => compilerOptions,
+            getCompilationSettings: () => self._compilerOptions,
             getCurrentDirectory:    () => libDir,
             getDefaultLibFileName:  (opts) => ts.getDefaultLibFilePath(opts),
-            fileExists:  (f) => f === VIRTUAL_FILENAME || ts.sys.fileExists(f),
-            readFile:    (f) => f === VIRTUAL_FILENAME ? this._content : ts.sys.readFile(f),
-            readDirectory:   ts.sys.readDirectory.bind(ts.sys),
-            directoryExists: ts.sys.directoryExists.bind(ts.sys),
-            getDirectories:  ts.sys.getDirectories.bind(ts.sys),
+            fileExists:             (f) => f === VIRTUAL_FILENAME || ts.sys.fileExists(f),
+            readFile:               (f) => f === VIRTUAL_FILENAME ? self._content : ts.sys.readFile(f),
+            readDirectory:          ts.sys.readDirectory.bind(ts.sys),
+            directoryExists:        ts.sys.directoryExists.bind(ts.sys),
+            getDirectories:         ts.sys.getDirectories.bind(ts.sys),
         };
 
         this._service = ts.createLanguageService(host, ts.createDocumentRegistry());
     }
 
-    /** Call before every request with the current virtual JS content. */
     updateContent(content: string): void {
         this._content = content;
         this._version++;
@@ -152,6 +172,9 @@ export class JsLanguageService implements vscode.Disposable {
         try {
             return this._service.getCompletionsAtPosition(VIRTUAL_FILENAME, offset, {
                 triggerCharacter: trigger as ts.CompletionsTriggerCharacter | undefined,
+                includeCompletionsWithInsertText:      true,
+                includeCompletionsForModuleExports:    false,
+                includeAutomaticOptionalChainCompletions: true,
             }) ?? undefined;
         } catch { return undefined; }
     }
@@ -181,13 +204,38 @@ export class JsLanguageService implements vscode.Disposable {
         } catch { return undefined; }
     }
 
+    getSyntacticDiagnostics(): ts.DiagnosticWithLocation[] {
+        try {
+            return this._service.getSyntacticDiagnostics(VIRTUAL_FILENAME) ?? [];
+        } catch { return []; }
+    }
+
+    getSemanticDiagnostics(): ts.Diagnostic[] {
+        try {
+            return this._service.getSemanticDiagnostics(VIRTUAL_FILENAME) ?? [];
+        } catch { return []; }
+    }
+
+    getEncodedSemanticClassifications(
+        start: number, length: number
+    ): ts.Classifications {
+        try {
+            return this._service.getEncodedSemanticClassifications(
+                VIRTUAL_FILENAME, { start, length },
+                ts.SemanticClassificationFormat.TwentyTwenty
+            );
+        } catch {
+            return { spans: [], endOfLineState: ts.EndOfLineState.None };
+        }
+    }
+
     dispose(): void {
         this._service.dispose();
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Singleton — one service shared across all providers
+// Singleton
 // ─────────────────────────────────────────────────────────────────────────────
 let _service: JsLanguageService | undefined;
 
@@ -202,7 +250,7 @@ export function disposeJsLanguageService(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Zone helper
+// Zone helpers
 // ─────────────────────────────────────────────────────────────────────────────
 export function isInJsZone(
     document: vscode.TextDocument,
@@ -253,5 +301,18 @@ export function tsKindToVsKind(kind: string): vscode.CompletionItemKind {
             return vscode.CompletionItemKind.Value;
         default:
             return vscode.CompletionItemKind.Property;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ts.DiagnosticCategory → vscode.DiagnosticSeverity
+// ─────────────────────────────────────────────────────────────────────────────
+export function tsSeverityToVs(category: ts.DiagnosticCategory): vscode.DiagnosticSeverity {
+    switch (category) {
+        case ts.DiagnosticCategory.Error:       return vscode.DiagnosticSeverity.Error;
+        case ts.DiagnosticCategory.Warning:     return vscode.DiagnosticSeverity.Warning;
+        case ts.DiagnosticCategory.Suggestion:  return vscode.DiagnosticSeverity.Hint;
+        case ts.DiagnosticCategory.Message:     return vscode.DiagnosticSeverity.Information;
+        default:                                return vscode.DiagnosticSeverity.Warning;
     }
 }

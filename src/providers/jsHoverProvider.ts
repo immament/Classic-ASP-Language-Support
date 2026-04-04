@@ -1,10 +1,17 @@
 /**
  * jsHoverProvider.ts  (providers/)
  *
- * Shows TypeScript Quick Info (type + JSDoc) when hovering over a symbol
- * inside a <script> block in a .asp file.
+ * Hover info for symbols inside <script> blocks.
  *
- * Mirrors CssHoverProvider in structure and registration pattern.
+ * Fixes vs previous version:
+ *   • Documentation is now rendered as a proper MarkdownString matching
+ *     VS Code's built-in JS hover format:
+ *       ```typescript
+ *       (method) console.log(...): void
+ *       ```
+ *       Plain text documentation paragraph.
+ *   • Strips Node.js-specific content by virtue of jsUtils now blocking
+ *     @types/node via types:[]
  */
 
 import * as vscode from 'vscode';
@@ -37,15 +44,25 @@ export class JsHoverProvider implements vscode.HoverProvider {
 
         const displayText = info.displayParts?.map(p => p.text).join('') ?? '';
         const docsText    = info.documentation?.map(p => p.text).join('') ?? '';
+        const tagsText    = info.tags?.map(tag => {
+            const name    = tag.name;
+            const tagBody = tag.text?.map(p => p.text).join('') ?? '';
+            return tagBody ? `*@${name}* — ${tagBody}` : `*@${name}*`;
+        }).join('\n\n') ?? '';
 
         if (!displayText && !docsText) { return undefined; }
 
-        const md = new vscode.MarkdownString();
+        // Format exactly like VS Code's built-in JS hover:
+        //   ```typescript
+        //   (method) console.log(message?: any, ...): void
+        //   ```
+        //   Documentation text here.
+        const md = new vscode.MarkdownString('', true);
+        md.isTrusted = true;
         if (displayText) { md.appendCodeblock(displayText, 'typescript'); }
-        if (docsText)    { md.appendMarkdown('\n\n' + docsText); }
+        if (docsText)    { md.appendMarkdown(docsText); }
+        if (tagsText)    { md.appendMarkdown('\n\n' + tagsText); }
 
-        // Map the TS text span back to a real VS Code range so the hover
-        // highlights the correct word in the editor.
         let range: vscode.Range | undefined;
         if (info.textSpan) {
             range = new vscode.Range(

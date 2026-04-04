@@ -11,6 +11,8 @@ import { registerAspStructureDiagnostics } from './providers/aspStructureDiagnos
 import { JsCompletionProvider } from './providers/jsCompletionProvider';
 import { JsHoverProvider } from './providers/jsHoverProvider';
 import { JsSignatureHelpProvider } from './providers/jsSignatureHelpProvider';
+import { JsSemanticTokensProvider, JS_SEMANTIC_LEGEND } from './providers/jsSemanticProvider';
+import { registerJsDiagnostics } from './providers/jsDiagnosticsProvider';
 import { disposeJsLanguageService } from './utils/jsUtils';
 import { IncludePathCompletionProvider, AspDefinitionProvider } from './providers/includeProvider';
 import { IncludeDocumentLinkProvider, HtmlAttributeLinkProvider, HtmlAttributePathCompletionProvider } from './providers/linkProvider';
@@ -87,7 +89,6 @@ async function openFormattingPreview(
         { preview: true }
     );
 
-    // Clean up the virtual provider once the diff tab is closed
     const listener = vscode.window.onDidChangeVisibleTextEditors(() => {
         const still = vscode.window.visibleTextEditors.some(
             e => e.document.uri.toString() === previewUri.toString()
@@ -103,6 +104,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     addRegionHighlights(context);
     registerCssDiagnostics(context);
+    registerJsDiagnostics(context);
     const htmlStructureCollection = registerHtmlStructureDiagnostics(context);
     const aspStructureCollection  = registerAspStructureDiagnostics(context);
 
@@ -121,9 +123,6 @@ export function activate(context: vscode.ExtensionContext) {
             const fullText  = document.getText();
             const formatted = await formatCompleteAspFile(fullText);
 
-            // When formatPreview is enabled, open a diff editor instead of
-            // applying changes. The formatter returns no edits so the file
-            // is never touched until the user formats again with preview off.
             const config = vscode.workspace.getConfiguration('aspLanguageSupport');
             if (config.get<boolean>('formatPreview', false)) {
                 if (formatted === fullText) {
@@ -154,8 +153,8 @@ export function activate(context: vscode.ExtensionContext) {
         'n','o','p','q','r','s','t','u','v','w','x','y','z'
     );
 
-    // JS completions — fires on dot (member access) and on every letter key
-    // so suggestions appear as you type identifiers, not only after a dot.
+    // JS completions — fires on dot (member access), '(' (after function name),
+    // and every letter/underscore/$  so suggestions appear as you type.
     const jsCompletionProvider = vscode.languages.registerCompletionItemProvider(
         'asp', new JsCompletionProvider(),
         '.', '(',
@@ -166,7 +165,6 @@ export function activate(context: vscode.ExtensionContext) {
         '_', '$'
     );
 
-    // Triggers on letters + path chars so suggestions stay live as the user types
     const includePathProvider = vscode.languages.registerCompletionItemProvider(
         'asp', new IncludePathCompletionProvider(),
         '"', "'", '/', '\\', '.',
@@ -197,27 +195,23 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // ── Go To Definition ──────────────────────────────────────────────────────
-    // F12 / Ctrl+Click on functions, subs, variables, constants, and COM vars.
-    // Also guards against HTML attribute values falling through to symbol lookup.
     const definitionProvider = vscode.languages.registerDefinitionProvider(
         'asp', new AspDefinitionProvider()
     );
 
     // ── Rename ────────────────────────────────────────────────────────────────
-    // F2 rename for VBScript functions, subs, variables, constants, and COM vars.
-    // Works across the current file and all transitively #include'd files.
     const renameProvider = vscode.languages.registerRenameProvider(
         'asp', new AspRenameProvider()
     );
 
-    // ── Document symbols (Outline + breadcrumb) ─────────────────────────────
+    // ── Document symbols ─────────────────────────────────────────────────────
     const documentSymbolProvider = vscode.languages.registerDocumentSymbolProvider(
         'asp', new AspDocumentSymbolProvider()
     );
 
     // ── Signature help ───────────────────────────────────────────────────────
-    // Two separate providers — one for VBScript (ASP zone), one for JS zone.
-    // They guard themselves with zone checks so they never conflict.
+    // Two providers — one for VBScript (ASP zone), one for JS. Each guards
+    // itself with a zone check so they never fire in the wrong context.
     const aspSignatureHelpProvider = vscode.languages.registerSignatureHelpProvider(
         'asp',
         new AspSignatureHelpProvider(),
@@ -242,10 +236,16 @@ export function activate(context: vscode.ExtensionContext) {
     });
 
     // ── Semantic tokens ───────────────────────────────────────────────────────
-    // Highlights user-defined function/sub names using VS Code's semantic token API.
-    const semanticTokensProviderInstance = new AspSemanticTokensProvider();
-    const semanticProvider = vscode.languages.registerDocumentSemanticTokensProvider(
-        'asp', semanticTokensProviderInstance, ASP_SEMANTIC_LEGEND
+    // ASP/VBScript tokens (existing)
+    const aspSemanticTokensInstance = new AspSemanticTokensProvider();
+    const aspSemanticProvider = vscode.languages.registerDocumentSemanticTokensProvider(
+        'asp', aspSemanticTokensInstance, ASP_SEMANTIC_LEGEND
+    );
+
+    // JS tokens (new) — separate legend, separate provider, same language ID
+    const jsSemanticTokensInstance = new JsSemanticTokensProvider();
+    const jsSemanticProvider = vscode.languages.registerDocumentSemanticTokensProvider(
+        'asp', jsSemanticTokensInstance, JS_SEMANTIC_LEGEND
     );
 
     // ── Void element quick fix ─────────────────────────────────────────────────
@@ -254,8 +254,8 @@ export function activate(context: vscode.ExtensionContext) {
         { providedCodeActionKinds: VoidElementQuickFixProvider.providedCodeActionKinds }
     );
 
-    // ── Hover docs ────────────────────────────────────────────────────────────
-    // Three separate hover providers — they each guard with zone checks.
+    // ── Hover providers ───────────────────────────────────────────────────────
+    // All three guard themselves with zone checks so they never conflict.
     const aspHoverProvider = vscode.languages.registerHoverProvider(
         'asp', new AspHoverProvider()
     );
@@ -293,11 +293,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // ── Auto-trigger path suggestions inside href/src/action/data-src values ──
-    // VS Code's built-in HTML provider closes the suggestion session with
-    // isIncomplete:false, preventing our provider from firing on plain letter
-    // keystrokes. Force-retriggering on every document change inside a recognised
-    // attribute value bypasses this entirely.
+    // ── Auto-trigger path suggestions inside href/src/action/data-src ─────────
     const htmlAttrPathTrigger = vscode.workspace.onDidChangeTextDocument(e => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || editor.document !== e.document) return;
@@ -327,6 +323,7 @@ export function activate(context: vscode.ExtensionContext) {
         jsCompletionProvider,
         jsHoverProvider,
         jsSignatureHelpProvider,
+        jsSemanticProvider,
         includePathProvider,
         includeDocumentLinkProvider,
         htmlAttributeLinkProvider,
@@ -337,8 +334,8 @@ export function activate(context: vscode.ExtensionContext) {
         workspaceSymbolProvider,
         wsCacheInvalidator,
         aspSignatureHelpProvider,
-        semanticProvider,
-        semanticTokensProviderInstance,
+        aspSemanticProvider,
+        aspSemanticTokensInstance,
         aspHoverProvider,
         voidElementQuickFix,
         inlineStyleTrigger,
@@ -347,7 +344,5 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate(): void {
-    // Clean up the TypeScript Language Service singleton so it doesn't leak
-    // between extension reloads during development.
     disposeJsLanguageService();
 }
