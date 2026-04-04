@@ -9,6 +9,9 @@ import { registerCssDiagnostics } from './providers/cssDiagnosticsProvider';
 import { registerHtmlStructureDiagnostics, VoidElementQuickFixProvider } from './providers/htmlStructureDiagnosticsProvider';
 import { registerAspStructureDiagnostics } from './providers/aspStructureDiagnosticsProvider';
 import { JsCompletionProvider } from './providers/jsCompletionProvider';
+import { JsHoverProvider } from './providers/jsHoverProvider';
+import { JsSignatureHelpProvider } from './providers/jsSignatureHelpProvider';
+import { disposeJsLanguageService } from './utils/jsUtils';
 import { IncludePathCompletionProvider, AspDefinitionProvider } from './providers/includeProvider';
 import { IncludeDocumentLinkProvider, HtmlAttributeLinkProvider, HtmlAttributePathCompletionProvider } from './providers/linkProvider';
 import { AspSemanticTokensProvider, ASP_SEMANTIC_LEGEND } from './providers/aspSemanticProvider';
@@ -151,8 +154,16 @@ export function activate(context: vscode.ExtensionContext) {
         'n','o','p','q','r','s','t','u','v','w','x','y','z'
     );
 
+    // JS completions — fires on dot (member access) and on every letter key
+    // so suggestions appear as you type identifiers, not only after a dot.
     const jsCompletionProvider = vscode.languages.registerCompletionItemProvider(
-        'asp', new JsCompletionProvider(), '.'
+        'asp', new JsCompletionProvider(),
+        '.', '(',
+        'a','b','c','d','e','f','g','h','i','j','k','l','m',
+        'n','o','p','q','r','s','t','u','v','w','x','y','z',
+        'A','B','C','D','E','F','G','H','I','J','K','L','M',
+        'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
+        '_', '$'
     );
 
     // Triggers on letters + path chars so suggestions stay live as the user types
@@ -204,10 +215,18 @@ export function activate(context: vscode.ExtensionContext) {
         'asp', new AspDocumentSymbolProvider()
     );
 
-    // ── Signature help (parameter hints on '(' and ',') ─────────────────────
-    const signatureHelpProvider = vscode.languages.registerSignatureHelpProvider(
+    // ── Signature help ───────────────────────────────────────────────────────
+    // Two separate providers — one for VBScript (ASP zone), one for JS zone.
+    // They guard themselves with zone checks so they never conflict.
+    const aspSignatureHelpProvider = vscode.languages.registerSignatureHelpProvider(
         'asp',
         new AspSignatureHelpProvider(),
+        { triggerCharacters: ['('], retriggerCharacters: [','] }
+    );
+
+    const jsSignatureHelpProvider = vscode.languages.registerSignatureHelpProvider(
+        'asp',
+        new JsSignatureHelpProvider(),
         { triggerCharacters: ['('], retriggerCharacters: [','] }
     );
 
@@ -236,14 +255,17 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // ── Hover docs ────────────────────────────────────────────────────────────
-    // Shows docs for functions, subs, variables, COM members, and VBScript keywords.
+    // Three separate hover providers — they each guard with zone checks.
     const aspHoverProvider = vscode.languages.registerHoverProvider(
         'asp', new AspHoverProvider()
     );
 
-    // ── CSS hover ─────────────────────────────────────────────────────────────
     const cssHoverProvider = vscode.languages.registerHoverProvider(
         'asp', new CssHoverProvider()
+    );
+
+    const jsHoverProvider = vscode.languages.registerHoverProvider(
+        'asp', new JsHoverProvider()
     );
 
     // ── Key handlers ──────────────────────────────────────────────────────────
@@ -303,6 +325,8 @@ export function activate(context: vscode.ExtensionContext) {
         cssCompletionProvider,
         cssHoverProvider,
         jsCompletionProvider,
+        jsHoverProvider,
+        jsSignatureHelpProvider,
         includePathProvider,
         includeDocumentLinkProvider,
         htmlAttributeLinkProvider,
@@ -312,7 +336,7 @@ export function activate(context: vscode.ExtensionContext) {
         documentSymbolProvider,
         workspaceSymbolProvider,
         wsCacheInvalidator,
-        signatureHelpProvider,
+        aspSignatureHelpProvider,
         semanticProvider,
         semanticTokensProviderInstance,
         aspHoverProvider,
@@ -322,4 +346,8 @@ export function activate(context: vscode.ExtensionContext) {
     );
 }
 
-export function deactivate() {}
+export function deactivate(): void {
+    // Clean up the TypeScript Language Service singleton so it doesn't leak
+    // between extension reloads during development.
+    disposeJsLanguageService();
+}
