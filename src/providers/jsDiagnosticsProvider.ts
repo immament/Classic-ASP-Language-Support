@@ -15,6 +15,7 @@ import * as ts     from 'typescript';
 import {
     buildVirtualJsContent,
     getJsLanguageService,
+    getJsRanges,        // ← now shared from jsUtils (fix #2)
     tsSeverityToVs,
 } from '../utils/jsUtils';
 
@@ -28,25 +29,6 @@ const SUPPRESSED_CODES = new Set([
     2531,   // Object is possibly 'null'
     2532,   // Object is possibly 'undefined'
 ]);
-
-function getJsRanges(content: string): Array<{ start: number; end: number }> {
-    const ranges: Array<{ start: number; end: number }> = [];
-    const re = /<script(\s[^>]*)?>/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(content)) !== null) {
-        const attrs  = m[1] ?? '';
-        const tagEnd = m.index + m[0].length;
-        const typeMatch = attrs.match(/\btype\s*=\s*["']([^"']+)["']/i);
-        if (typeMatch && !/javascript|module/i.test(typeMatch[1])) { continue; }
-        if (/\blanguage\s*=\s*["']vbscript["']/i.test(attrs)) { continue; }
-        const rest     = content.slice(tagEnd);
-        const closeIdx = rest.search(/<\/script\s*>/i);
-        const end      = closeIdx === -1 ? content.length : tagEnd + closeIdx;
-        ranges.push({ start: tagEnd, end });
-        re.lastIndex = end;
-    }
-    return ranges;
-}
 
 function getDiagnosticsForDocument(document: vscode.TextDocument): vscode.Diagnostic[] {
     const content  = document.getText();
@@ -70,7 +52,11 @@ function getDiagnosticsForDocument(document: vscode.TextDocument): vscode.Diagno
         const code = typeof d.code === 'number' ? d.code : 0;
         if (SUPPRESSED_CODES.has(code)) { continue; }
 
-        if (!jsRanges.some(r => d.start! >= r.start && d.start! < r.end)) { continue; }
+        // FIX #4: use `d.start! <= r.end` (was `< r.end`) so that a diagnostic
+        // whose start sits exactly on the last character of a JS range is still
+        // accepted. `end` in getJsRanges is the offset of `<` in `</script>`,
+        // which is a valid position for a token that abuts the closing tag.
+        if (!jsRanges.some(r => d.start! >= r.start && d.start! <= r.end)) { continue; }
 
         const message = typeof d.messageText === 'string'
             ? d.messageText

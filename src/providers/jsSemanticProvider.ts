@@ -21,6 +21,7 @@ import * as vscode from 'vscode';
 import {
     buildVirtualJsContent,
     getJsLanguageService,
+    getJsRanges,        // ← now shared from jsUtils (fix #2)
 } from '../utils/jsUtils';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,28 +131,6 @@ function decode(encoded: number): { typeIdx: number; modBits: number } {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// JS range helper — used to filter out spurious tokens on <script> tag text
-// ─────────────────────────────────────────────────────────────────────────────
-function getJsRanges(content: string): Array<{ start: number; end: number }> {
-    const ranges: Array<{ start: number; end: number }> = [];
-    const re = /<script(\s[^>]*)?>/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(content)) !== null) {
-        const attrs  = m[1] ?? '';
-        const tagEnd = m.index + m[0].length;
-        const typeMatch = attrs.match(/\btype\s*=\s*["']([^"']+)["']/i);
-        if (typeMatch && !/javascript|module/i.test(typeMatch[1])) { continue; }
-        if (/\blanguage\s*=\s*["']vbscript["']/i.test(attrs)) { continue; }
-        const rest     = content.slice(tagEnd);
-        const closeIdx = rest.search(/<\/script\s*>/i);
-        const end      = closeIdx === -1 ? content.length : tagEnd + closeIdx;
-        ranges.push({ start: tagEnd, end });
-        re.lastIndex = end;
-    }
-    return ranges;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Provider
 // ─────────────────────────────────────────────────────────────────────────────
 export class JsSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
@@ -188,9 +167,11 @@ export class JsSemanticTokensProvider implements vscode.DocumentSemanticTokensPr
             const length  = spans[i + 1];
             const encoded = spans[i + 2];
 
-            // Filter out tokens from <script ...> tag text that TS picks up
-            // because the tag itself is not blanked in the virtual content.
-            if (!jsRanges.some(r => offset >= r.start && offset < r.end)) { continue; }
+            // FIX #4: use `offset <= r.end` (was `offset < r.end`) so that a
+            // token whose start sits exactly on the last character before
+            // `</script>` is not incorrectly stripped. Matches the same fix
+            // applied in jsDiagnosticsProvider.
+            if (!jsRanges.some(r => offset >= r.start && offset <= r.end)) { continue; }
 
             const { typeIdx, modBits } = decode(encoded);
             if (typeIdx === -1) { continue; }
