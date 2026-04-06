@@ -5,6 +5,15 @@ All notable changes to the "Classic ASP Language Support" extension will be docu
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-04-06
+
+### 🛠️ Fixed
+- **Fixed SQL semantic colouring missing** - SQL token types were absent from the shared semantic legend, causing all SQL string colours to be silently dropped
+- **Fixed VBScript and JavaScript semantic colouring cancelling each other out** - Merged both semantic colouring into a single combined provider
+- **Fixed extension broken after packaging** - `typescript` was listed in both `dependencies` and `devDependencies`, causing `vsce` to exclude it from the `.vsix` bundle
+
+---
+
 ## [0.5.0] - 2026-04-05
 
 ### ✨ Added
@@ -339,6 +348,7 @@ First public release focused on Classic ASP code formatting.
 
 ---
 
+[0.5.1]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.5.1
 [0.5.0]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.5.0
 [0.4.1]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.4.1
 [0.4.0]: https://github.com/ashtonckj/Classic-ASP-Language-Support/releases/tag/v0.4.0
