@@ -3,13 +3,17 @@ import { collectAllSymbols } from './includeProvider';
 import { getZone } from '../utils/aspUtils';
 import { VBSCRIPT_KEYWORDS_SET } from '../constants/aspKeywords';
 import {
-    ASP_SEMANTIC_LEGEND,
     T_FUNCTION, T_NAMESPACE, T_VARIABLE, T_PARAMETER, T_CONSTANT,
     M_DECLARATION, M_READONLY,
     isSql, isSqlExpression, ALL_SQL_KEYWORDS,
     SqlStringGroup, SqlStringSegment, extractSqlGroup, emitSqlTokensForGroup,
 } from './sqlSemanticProvider';
-export { ASP_SEMANTIC_LEGEND } from './sqlSemanticProvider';
+// Use COMBINED_SEMANTIC_LEGEND from jsSemanticProvider — it now includes the
+// SQL token types (indices 23–34) so all three providers (ASP, SQL, JS) share
+// one identical legend. VS Code maps token indices through whichever legend is
+// registered first; using a different legend here would corrupt all colours.
+import { COMBINED_SEMANTIC_LEGEND } from './jsSemanticProvider';
+export { COMBINED_SEMANTIC_LEGEND as ASP_SEMANTIC_LEGEND } from './jsSemanticProvider';
 
 export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
 
@@ -28,7 +32,7 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.SemanticTokens> {
 
-        const builder    = new vscode.SemanticTokensBuilder(ASP_SEMANTIC_LEGEND);
+        const builder    = new vscode.SemanticTokensBuilder(COMBINED_SEMANTIC_LEGEND);
         const text       = document.getText();
         const allSymbols = collectAllSymbols(document);
 

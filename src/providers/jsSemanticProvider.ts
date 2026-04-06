@@ -28,10 +28,16 @@ import {
 // Combined legend — shared with aspSemanticProvider.ts
 // ─────────────────────────────────────────────────────────────────────────────
 export const TOKEN_TYPES = [
+    // Standard VS Code token types — indices 0–22
     'namespace', 'type', 'class', 'enum', 'interface', 'struct',
     'typeParameter', 'parameter', 'variable', 'property', 'enumMember',
     'event', 'function', 'method', 'macro', 'keyword', 'modifier',
     'comment', 'string', 'number', 'regexp', 'operator', 'decorator',
+    // ASP/SQL-specific token types — indices 23–34
+    // Must match the order declared in sqlSemanticProvider.ts exactly
+    'sqlDml', 'sqlDdl', 'sqlLogical', 'sqlKeyword', 'sqlFunction', 'sqlType',
+    'sqlVariable', 'sqlNumber', 'sqlBracketPunct', 'sqlBracketContent',
+    'sqlTable', 'sqlColumn',
 ] as const;
 
 export const TOKEN_MODIFIERS = [
