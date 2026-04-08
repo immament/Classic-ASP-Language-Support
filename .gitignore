@@ -7,3 +7,4 @@ out/
 
 # VSIX package
 *.vsix
+dist/

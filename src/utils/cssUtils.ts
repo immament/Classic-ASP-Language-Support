@@ -3,7 +3,7 @@
  * Imports shared zone detection from aspUtils.ts.
  */
 
-export { getZone, Zone } from './aspUtils';
+export { getZone, type Zone } from './aspUtils';
 import { TextDocument as LsTextDocument } from 'vscode-languageserver-textdocument';
 
 /**
