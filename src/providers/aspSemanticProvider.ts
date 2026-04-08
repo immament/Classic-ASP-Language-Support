@@ -4,15 +4,24 @@ import { getZone } from '../utils/aspUtils';
 import { VBSCRIPT_KEYWORDS_SET } from '../constants/aspKeywords';
 import {
     ASP_SEMANTIC_LEGEND,
-    T_FUNCTION, T_NAMESPACE, T_VARIABLE, T_PARAMETER, T_CONSTANT,
-    M_DECLARATION, M_READONLY,
-    isSql, isSqlExpression, ALL_SQL_KEYWORDS,
-    SqlStringGroup, SqlStringSegment, extractSqlGroup, emitSqlTokensForGroup,
+    T_FUNCTION,
+    T_NAMESPACE,
+    T_VARIABLE,
+    T_PARAMETER,
+    T_CONSTANT,
+    M_DECLARATION,
+    M_READONLY,
+    isSql,
+    isSqlExpression,
+    ALL_SQL_KEYWORDS,
+    SqlStringGroup,
+    SqlStringSegment,
+    extractSqlGroup,
+    emitSqlTokensForGroup,
 } from './sqlSemanticProvider';
 export { ASP_SEMANTIC_LEGEND } from './sqlSemanticProvider';
 
 export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
-
     private readonly _diagnostics: vscode.DiagnosticCollection;
 
     constructor() {
@@ -23,13 +32,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         this._diagnostics.dispose();
     }
 
-    provideDocumentSemanticTokens(
-        document: vscode.TextDocument,
-        token: vscode.CancellationToken
-    ): vscode.ProviderResult<vscode.SemanticTokens> {
-
-        const builder    = new vscode.SemanticTokensBuilder(ASP_SEMANTIC_LEGEND);
-        const text       = document.getText();
+    provideDocumentSemanticTokens(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.ProviderResult<vscode.SemanticTokens> {
+        const builder = new vscode.SemanticTokensBuilder(ASP_SEMANTIC_LEGEND);
+        const text = document.getText();
         const allSymbols = collectAllSymbols(document);
 
         // Build a per-character ASP-zone bitmap once from the raw text.
@@ -41,9 +46,13 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             let inside = false;
             for (let i = 0; i < text.length; i++) {
                 if (!inside && text[i] === '<' && i + 1 < text.length && text[i + 1] === '%') {
-                    inside = true; aspMap[i] = 1; i++; aspMap[i] = 1;
+                    inside = true;
+                    aspMap[i] = 1;
+                    i++;
+                    aspMap[i] = 1;
                 } else if (inside && text[i] === '%' && i + 1 < text.length && text[i + 1] === '>') {
-                    inside = false; i++;
+                    inside = false;
+                    i++;
                 } else if (inside) {
                     aspMap[i] = 1;
                 }
@@ -65,31 +74,23 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
         // Returns true when a same-document symbol sits inside a JS <script> block.
         function isJsZoneSymbol(filePath: string, line: number): boolean {
-            if (filePath !== docPath) { return false; }
+            if (filePath !== docPath) {
+                return false;
+            }
             return getZone(text, document.offsetAt(new vscode.Position(line, 0))) === 'js';
         }
 
         const funcMap = new Map<string, 'function' | 'Sub'>();
         for (const fn of allSymbols.functions) {
-            if (isJsZoneSymbol(fn.filePath, fn.line)) { continue; }
+            if (isJsZoneSymbol(fn.filePath, fn.line)) {
+                continue;
+            }
             funcMap.set(fn.name.toLowerCase(), fn.kind === 'Function' ? 'function' : 'Sub');
         }
 
-        const varSet = new Set<string>(
-            allSymbols.variables
-                .filter(v => !isJsZoneSymbol(v.filePath, v.line))
-                .map(v => v.name.toLowerCase())
-        );
-        const comVarSet = new Set<string>(
-            allSymbols.comVariables
-                .filter(cv => !isJsZoneSymbol(cv.filePath, cv.line))
-                .map(cv => cv.name.toLowerCase())
-        );
-        const constSet = new Set<string>(
-            allSymbols.constants
-                .filter(c => !isJsZoneSymbol(c.filePath, c.line))
-                .map(c => c.name.toLowerCase())
-        );
+        const varSet = new Set<string>(allSymbols.variables.filter((v) => !isJsZoneSymbol(v.filePath, v.line)).map((v) => v.name.toLowerCase()));
+        const comVarSet = new Set<string>(allSymbols.comVariables.filter((cv) => !isJsZoneSymbol(cv.filePath, cv.line)).map((cv) => cv.name.toLowerCase()));
+        const constSet = new Set<string>(allSymbols.constants.filter((c) => !isJsZoneSymbol(c.filePath, c.line)).map((c) => c.name.toLowerCase()));
 
         // Parameter scoping: lineNumber -> Set<paramName>
         // Only register VBScript function params — JS function params must not
@@ -97,14 +98,24 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         const lineCount = document.lineCount;
         const lineParamSets: Map<number, Set<string>> = new Map();
         for (const fn of allSymbols.functions) {
-            if (fn.paramNames.length === 0)           { continue; }
-            if (fn.filePath !== docPath)               { continue; }
-            if (isJsZoneSymbol(fn.filePath, fn.line)) { continue; }
+            if (fn.paramNames.length === 0) {
+                continue;
+            }
+            if (fn.filePath !== docPath) {
+                continue;
+            }
+            if (isJsZoneSymbol(fn.filePath, fn.line)) {
+                continue;
+            }
             const start = fn.line;
-            const end   = fn.endLine !== -1 ? fn.endLine : lineCount - 1;
+            const end = fn.endLine !== -1 ? fn.endLine : lineCount - 1;
             for (let l = start; l <= end; l++) {
-                if (!lineParamSets.has(l)) { lineParamSets.set(l, new Set()); }
-                for (const p of fn.paramNames) { lineParamSets.get(l)!.add(p.toLowerCase()); }
+                if (!lineParamSets.has(l)) {
+                    lineParamSets.set(l, new Set());
+                }
+                for (const p of fn.paramNames) {
+                    lineParamSets.get(l)!.add(p.toLowerCase());
+                }
             }
         }
 
@@ -114,7 +125,7 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         const lineTextCache: string[] = new Array(lineCount);
         const lineOffsetCache: number[] = new Array(lineCount);
         for (let li = 0; li < lineCount; li++) {
-            lineTextCache[li]   = document.lineAt(li).text;
+            lineTextCache[li] = document.lineAt(li).text;
             lineOffsetCache[li] = document.offsetAt(new vscode.Position(li, 0));
         }
 
@@ -123,7 +134,8 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             return isSql(t) || /^\s*EXEC(?:UTE)?\s+/i.test(t);
         }
 
-        const SQL_FRAGMENT_STARTERS = /^\s*(WHERE|ORDER\s+BY|GROUP\s+BY|HAVING|JOIN\b|LEFT\s+JOIN|RIGHT\s+JOIN|INNER\s+JOIN|FULL\s+JOIN|CROSS\s+JOIN|UNION(\s+ALL)?|WHEN\s+(MATCHED|NOT\s+MATCHED))\s+(?:[@\[a-zA-Z_]|\d)/i;
+        const SQL_FRAGMENT_STARTERS =
+            /^\s*(WHERE|ORDER\s+BY|GROUP\s+BY|HAVING|JOIN\b|LEFT\s+JOIN|RIGHT\s+JOIN|INNER\s+JOIN|FULL\s+JOIN|CROSS\s+JOIN|UNION(\s+ALL)?|WHEN\s+(MATCHED|NOT\s+MATCHED))\s+(?:[@\[a-zA-Z_]|\d)/i;
         // AND/OR/SET fragments: require an identifier then a comparison operator or SQL keyword.
         // This prevents plain English like "OR shift", "Set status to approved", "AND the employee"
         // from being mistaken for SQL clause fragments.
@@ -135,33 +147,43 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         }
 
         interface VarAssignment {
-            isSelfAppend:  boolean;
+            isSelfAppend: boolean;
             stitchedValue: string;
         }
-        const assignmentMap    = new Map<string, VarAssignment[]>();
-        const assignPattern    = /^\s*([a-zA-Z_]\w*)\s*=\s*(.+)$/;
+        const assignmentMap = new Map<string, VarAssignment[]>();
+        const assignPattern = /^\s*([a-zA-Z_]\w*)\s*=\s*(.+)$/;
         const processedAssignLines = new Set<number>();
 
         for (let li = 0; li < lineCount; li++) {
-            if (processedAssignLines.has(li)) { continue; }
+            if (processedAssignLines.has(li)) {
+                continue;
+            }
 
-            const lineText   = lineTextCache[li];
+            const lineText = lineTextCache[li];
             const lineOffset = lineOffsetCache[li];
-            const midOffset  = lineOffset + Math.floor(lineText.length / 2);
-            if (!inAsp(midOffset)) { continue; }
+            const midOffset = lineOffset + Math.floor(lineText.length / 2);
+            if (!inAsp(midOffset)) {
+                continue;
+            }
 
             const trimmedForComment733 = lineText.trimStart();
-            if (trimmedForComment733.startsWith("'") || /^rem\s/i.test(trimmedForComment733)) { continue; }
+            if (trimmedForComment733.startsWith("'") || /^rem\s/i.test(trimmedForComment733)) {
+                continue;
+            }
 
-            let stripped = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+            let stripped = lineText.replace(/"(?:[^"]|"")*"/g, (m) => ' '.repeat(m.length));
             const cpIdx = stripped.indexOf("'");
-            if (cpIdx !== -1) { stripped = stripped.substring(0, cpIdx); }
+            if (cpIdx !== -1) {
+                stripped = stripped.substring(0, cpIdx);
+            }
 
             const am = assignPattern.exec(stripped);
-            if (!am) { continue; }
+            if (!am) {
+                continue;
+            }
 
             const varName = am[1].toLowerCase();
-            const rhs     = am[2].trim();
+            const rhs = am[2].trim();
 
             // Cache escaped varName for self-append check
             const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -174,7 +196,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                 const group = extractSqlGroup(document, li, quoteCol);
                 if (group !== null) {
                     stitchedValue = group.stitched;
-                    for (const seg of group.segments) { processedAssignLines.add(seg.lineIndex); }
+                    for (const seg of group.segments) {
+                        processedAssignLines.add(seg.lineIndex);
+                    }
                 } else {
                     const strPat = /"((?:[^"]|"")*)"/g;
                     let sm: RegExpExecArray | null;
@@ -191,13 +215,15 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                 const rhsTrimmed = lineText.trimEnd();
                 if (rhsTrimmed.endsWith('_') && rhsTrimmed.slice(0, -1).trimEnd().endsWith('&')) {
                     for (let scanLi = li + 1; scanLi < lineCount; scanLi++) {
-                        const scanText  = lineTextCache[scanLi];
+                        const scanText = lineTextCache[scanLi];
                         const scanQuote = scanText.indexOf('"');
                         if (scanQuote !== -1) {
                             const group = extractSqlGroup(document, scanLi, scanQuote);
                             if (group !== null) {
                                 stitchedValue = group.stitched;
-                                for (const seg of group.segments) { processedAssignLines.add(seg.lineIndex); }
+                                for (const seg of group.segments) {
+                                    processedAssignLines.add(seg.lineIndex);
+                                }
                             } else {
                                 const strPat = /"((?:[^"]|"")*)"/g;
                                 let sm: RegExpExecArray | null;
@@ -210,14 +236,20 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                             break;
                         }
                         // Stop if this continuation line doesn't continue further
-                        if (!scanText.trimEnd().endsWith('_')) { break; }
+                        if (!scanText.trimEnd().endsWith('_')) {
+                            break;
+                        }
                     }
                 }
             }
 
-            if (!stitchedValue) { continue; }
+            if (!stitchedValue) {
+                continue;
+            }
 
-            if (!assignmentMap.has(varName)) { assignmentMap.set(varName, []); }
+            if (!assignmentMap.has(varName)) {
+                assignmentMap.set(varName, []);
+            }
             assignmentMap.get(varName)!.push({ isSelfAppend, stitchedValue });
         }
 
@@ -244,17 +276,27 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         while (changed) {
             changed = false;
             for (const [varName, assignments] of assignmentMap) {
-                if (sqlVars.has(varName)) { continue; }
-                const selfAssigns    = assignments.filter(a =>  a.isSelfAppend);
-                if (selfAssigns.length === 0) { continue; }
-                const nonSelfAssigns = assignments.filter(a => !a.isSelfAppend);
+                if (sqlVars.has(varName)) {
+                    continue;
+                }
+                const selfAssigns = assignments.filter((a) => a.isSelfAppend);
+                if (selfAssigns.length === 0) {
+                    continue;
+                }
+                const nonSelfAssigns = assignments.filter((a) => !a.isSelfAppend);
                 // Guard (b): must have at least one non-self-append as the SQL seed.
-                if (nonSelfAssigns.length === 0) { continue; }
+                if (nonSelfAssigns.length === 0) {
+                    continue;
+                }
                 // Guard (c): every non-self-append must look like SQL.
-                if (!nonSelfAssigns.every(a => isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue))) { continue; }
+                if (!nonSelfAssigns.every((a) => isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue))) {
+                    continue;
+                }
                 const allAppends = [...selfAssigns, ...nonSelfAssigns];
                 // Guard (d): at least one append must contain SQL content.
-                if (!allAppends.some(a => isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue))) { continue; }
+                if (!allAppends.some((a) => isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue))) {
+                    continue;
+                }
                 sqlVars.add(varName);
                 changed = true;
             }
@@ -276,7 +318,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             // Step A: collect candidates whose stitched value is a SQL expression.
             const sqlExprCandidates = new Set<string>();
             for (const [varName, assignments] of assignmentMap) {
-                if (sqlVars.has(varName)) { continue; }
+                if (sqlVars.has(varName)) {
+                    continue;
+                }
                 for (const a of assignments) {
                     if (!a.isSelfAppend && isSqlExpression(a.stitchedValue)) {
                         sqlExprCandidates.add(varName);
@@ -287,34 +331,38 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
             if (sqlExprCandidates.size > 0) {
                 const candidatePattern = new RegExp(
-                    '\\b(' + [...sqlExprCandidates]
-                        .map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-                        .join('|') + ')\\b',
-                    'gi'
+                    '\\b(' + [...sqlExprCandidates].map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
+                    'gi',
                 );
 
                 // Step B: walk every line. When we find an assignment into a sqlVar,
                 // follow the full continuation group and check ALL gap text for candidates.
                 let li = 0;
                 while (li < lineCount) {
-                    const lineText   = lineTextCache[li];
+                    const lineText = lineTextCache[li];
                     const lineOffset = lineOffsetCache[li];
-                    if (!inAsp(lineOffset + Math.floor(lineText.length / 2))) { li++; continue; }
+                    if (!inAsp(lineOffset + Math.floor(lineText.length / 2))) {
+                        li++;
+                        continue;
+                    }
 
-                    const stripped = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
-                    const cpIdx    = stripped.indexOf("'");
-                    const active   = cpIdx !== -1 ? stripped.substring(0, cpIdx) : stripped;
+                    const stripped = lineText.replace(/"(?:[^"]|"")*"/g, (m) => ' '.repeat(m.length));
+                    const cpIdx = stripped.indexOf("'");
+                    const active = cpIdx !== -1 ? stripped.substring(0, cpIdx) : stripped;
 
                     const am = assignPattern.exec(active);
-                    if (!am || !sqlVars.has(am[1].toLowerCase())) { li++; continue; }
+                    if (!am || !sqlVars.has(am[1].toLowerCase())) {
+                        li++;
+                        continue;
+                    }
 
                     // Found a SQL var assignment — scan this line and all its continuations.
                     let scanLi = li;
                     while (scanLi < lineCount) {
-                        const scanText    = lineTextCache[scanLi];
-                        const scanStripped = scanText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
-                        const scanCp       = scanStripped.indexOf("'");
-                        const scanActive   = scanCp !== -1 ? scanStripped.substring(0, scanCp) : scanStripped;
+                        const scanText = lineTextCache[scanLi];
+                        const scanStripped = scanText.replace(/"(?:[^"]|"")*"/g, (m) => ' '.repeat(m.length));
+                        const scanCp = scanStripped.indexOf("'");
+                        const scanActive = scanCp !== -1 ? scanStripped.substring(0, scanCp) : scanStripped;
 
                         candidatePattern.lastIndex = 0;
                         let m2: RegExpExecArray | null;
@@ -325,9 +373,13 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
                         // Continue only if this line ends with & _ (line continuation)
                         const trimmedEnd = scanActive.trimEnd();
-                        if (!trimmedEnd.endsWith('_')) { break; }
+                        if (!trimmedEnd.endsWith('_')) {
+                            break;
+                        }
                         const beforeUnderscore = trimmedEnd.slice(0, -1).trimEnd();
-                        if (!beforeUnderscore.endsWith('&') && !beforeUnderscore.endsWith('=')) { break; }
+                        if (!beforeUnderscore.endsWith('&') && !beforeUnderscore.endsWith('=')) {
+                            break;
+                        }
                         scanLi++;
                     }
                     li = scanLi + 1;
@@ -350,59 +402,71 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         // other functions we haven't seen) are left out of both sets so we
         // don't produce false warnings for them.
         // ─────────────────────────────────────────────────────────────────────
-        const sqlFuncs    = new Set<string>(); // funcName.toLowerCase()
+        const sqlFuncs = new Set<string>(); // funcName.toLowerCase()
         const nonStrFuncs = new Set<string>(); // funcName.toLowerCase()
 
         for (const fn of allSymbols.functions) {
-            if (fn.kind !== 'Function')            { continue; } // Subs can't return values
-            if (fn.filePath !== docPath)             { continue; }
-            if (fn.endLine === -1)                 { continue; }
+            if (fn.kind !== 'Function') {
+                continue;
+            } // Subs can't return values
+            if (fn.filePath !== docPath) {
+                continue;
+            }
+            if (fn.endLine === -1) {
+                continue;
+            }
 
-            const fnKey         = fn.name.toLowerCase();
+            const fnKey = fn.name.toLowerCase();
             // Pattern: <FunctionName>\s*=\s*<rhs>  (not preceded by another word char,
             // to avoid matching inside longer names)
             const escapedFnName = fn.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const returnPattern = new RegExp(
-                '^\\s*' + escapedFnName + '\\s*=\\s*(.+)$', 'i'
-            );
+            const returnPattern = new RegExp('^\\s*' + escapedFnName + '\\s*=\\s*(.+)$', 'i');
 
             let foundStringReturn = false;
-            let isSqlReturn       = false;
+            let isSqlReturn = false;
 
             for (let li = fn.line; li <= fn.endLine; li++) {
                 const lineText = lineTextCache[li];
 
                 // Skip VBScript comment lines entirely — don't analyse them for return values
                 const trimmedForComment846 = lineText.trimStart();
-                if (trimmedForComment846.startsWith("'") || /^rem\s/i.test(trimmedForComment846)) { continue; }
+                if (trimmedForComment846.startsWith("'") || /^rem\s/i.test(trimmedForComment846)) {
+                    continue;
+                }
 
                 // Strip string literals and comments for structural matching
-                let stripped = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
-                const cpIdx  = stripped.indexOf("'");
-                if (cpIdx !== -1) { stripped = stripped.substring(0, cpIdx); }
+                let stripped = lineText.replace(/"(?:[^"]|"")*"/g, (m) => ' '.repeat(m.length));
+                const cpIdx = stripped.indexOf("'");
+                if (cpIdx !== -1) {
+                    stripped = stripped.substring(0, cpIdx);
+                }
 
                 const rm = returnPattern.exec(stripped);
-                if (!rm) { continue; }
+                if (!rm) {
+                    continue;
+                }
 
                 // Found a return assignment — check if it contains a string literal.
                 // When quoteCol === -1 the return line uses a line continuation (_ at end)
                 // with the actual string on the next line e.g. BuildBOMCTE = _ / "WITH BOM..."
                 // Walk continuation lines to find the first quote, same as Pass A does.
                 let quoteCol = lineText.indexOf('"');
-                let quoteLi  = li;
+                let quoteLi = li;
 
                 if (quoteCol === -1) {
                     const rhsTrimmed = lineText.trimEnd();
                     if (rhsTrimmed.endsWith('_') && rhsTrimmed.slice(0, -1).trimEnd().endsWith('=')) {
                         for (let scanLi = li + 1; scanLi <= fn.endLine; scanLi++) {
-                            const scanText  = lineTextCache[scanLi];
+                            const scanText = lineTextCache[scanLi];
                             const scanQuote = scanText.indexOf('"');
                             if (scanQuote !== -1) {
                                 quoteCol = scanQuote;
-                                quoteLi  = scanLi;
+                                quoteLi = scanLi;
                                 break;
                             }
-                            if (!scanText.trimEnd().endsWith('_')) { break; }
+                            if (!scanText.trimEnd().endsWith('_')) {
+                                break;
+                            }
                         }
                     }
                     if (quoteCol === -1) {
@@ -452,61 +516,81 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         const sqlDiagnostics: vscode.Diagnostic[] = [];
         const assignLinePattern = /^\s*([a-zA-Z_]\w*)\s*=\s*(.+)$/;
 
-        for (const [varName3, assignments] of assignmentMap) {
-            if (!sqlVars.has(varName3)) { continue; }
+        const enabled_autoformat = false;
+        if (enabled_autoformat) {
+            for (const [varName3, assignments] of assignmentMap) {
+                if (!sqlVars.has(varName3)) {
+                    continue;
+                }
 
-            const escapedV3 = varName3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const selfRefRe  = new RegExp('^\\b' + escapedV3 + '\\b', 'i');
-            const varNameRe  = new RegExp('\\b' + escapedV3 + '\\b', 'i');
+                const escapedV3 = varName3.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const selfRefRe = new RegExp('^\\b' + escapedV3 + '\\b', 'i');
+                const varNameRe = new RegExp('\\b' + escapedV3 + '\\b', 'i');
 
-            // Skip variables promoted via SQL expression fragment — their assignments
-            // are intentionally SQL expressions (SUBSTRING, CHARINDEX, etc.) that don't
-            // pass isSql(), so the "non-SQL assignment" warning is a false positive.
-            if (sqlExprPromoted.has(varName3)) { continue; }
+                // Skip variables promoted via SQL expression fragment — their assignments
+                // are intentionally SQL expressions (SUBSTRING, CHARINDEX, etc.) that don't
+                // pass isSql(), so the "non-SQL assignment" warning is a false positive.
+                if (sqlExprPromoted.has(varName3)) {
+                    continue;
+                }
 
-            for (const a of assignments) {
-                if (a.isSelfAppend || isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue) || isSqlExpression(a.stitchedValue)) { continue; }
-
-                for (let li = 0; li < lineCount; li++) {
-                    const lineText   = lineTextCache[li];
-                    const lineOffset = lineOffsetCache[li];
-                    const midOffset  = lineOffset + Math.floor(lineText.length / 2);
-                    if (!inAsp(midOffset)) { continue; }
-
-                    const trimmedForComment918 = lineText.trimStart();
-                    if (trimmedForComment918.startsWith("'") || /^rem\s/i.test(trimmedForComment918)) { continue; }
-
-                    let stripped3 = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
-                    const cp3 = stripped3.indexOf("'");
-                    if (cp3 !== -1) { stripped3 = stripped3.substring(0, cp3); }
-
-                    const am3 = assignLinePattern.exec(stripped3);
-                    if (!am3 || am3[1].toLowerCase() !== varName3) { continue; }
-                    if (selfRefRe.test(am3[2].trim())) { continue; }
-
-                    const sp3 = /"((?:[^"]|"")*)"/g;
-                    let sm3: RegExpExecArray | null;
-                    const lits3: string[] = [];
-                    while ((sm3 = sp3.exec(lineText)) !== null) {
-                        lits3.push(sm3[1].replace(/""/g, '"'));
+                for (const a of assignments) {
+                    if (a.isSelfAppend || isSqlOrFragment(a.stitchedValue) || isSqlClauseFragment(a.stitchedValue) || isSqlExpression(a.stitchedValue)) {
+                        continue;
                     }
-                    if (lits3.length === 0 || lits3.join(' ') !== a.stitchedValue) { continue; }
 
-                    const varCol = lineText.search(varNameRe);
-                    if (varCol === -1) { continue; }
+                    for (let li = 0; li < lineCount; li++) {
+                        const lineText = lineTextCache[li];
+                        const lineOffset = lineOffsetCache[li];
+                        const midOffset = lineOffset + Math.floor(lineText.length / 2);
+                        if (!inAsp(midOffset)) {
+                            continue;
+                        }
 
-                    const range = new vscode.Range(
-                        new vscode.Position(li, varCol),
-                        new vscode.Position(li, varCol + varName3.length)
-                    );
-                    const diag = new vscode.Diagnostic(
-                        range,
-                        `'${am3[1]}' is already marked as a SQL variable. Highlighting may be incorrect.`,
-                        vscode.DiagnosticSeverity.Warning
-                    );
-                    diag.source = 'ASP SQL';
-                    sqlDiagnostics.push(diag);
-                    break;
+                        const trimmedForComment918 = lineText.trimStart();
+                        if (trimmedForComment918.startsWith("'") || /^rem\s/i.test(trimmedForComment918)) {
+                            continue;
+                        }
+
+                        let stripped3 = lineText.replace(/"(?:[^"]|"")*"/g, (m) => ' '.repeat(m.length));
+                        const cp3 = stripped3.indexOf("'");
+                        if (cp3 !== -1) {
+                            stripped3 = stripped3.substring(0, cp3);
+                        }
+
+                        const am3 = assignLinePattern.exec(stripped3);
+                        if (!am3 || am3[1].toLowerCase() !== varName3) {
+                            continue;
+                        }
+                        if (selfRefRe.test(am3[2].trim())) {
+                            continue;
+                        }
+
+                        const sp3 = /"((?:[^"]|"")*)"/g;
+                        let sm3: RegExpExecArray | null;
+                        const lits3: string[] = [];
+                        while ((sm3 = sp3.exec(lineText)) !== null) {
+                            lits3.push(sm3[1].replace(/""/g, '"'));
+                        }
+                        if (lits3.length === 0 || lits3.join(' ') !== a.stitchedValue) {
+                            continue;
+                        }
+
+                        const varCol = lineText.search(varNameRe);
+                        if (varCol === -1) {
+                            continue;
+                        }
+
+                        const range = new vscode.Range(new vscode.Position(li, varCol), new vscode.Position(li, varCol + varName3.length));
+                        const diag = new vscode.Diagnostic(
+                            range,
+                            `'${am3[1]}' is already marked as a SQL variable. Highlighting may be incorrect.`,
+                            vscode.DiagnosticSeverity.Warning,
+                        );
+                        diag.source = 'ASP SQL';
+                        sqlDiagnostics.push(diag);
+                        break;
+                    }
                 }
             }
         }
@@ -528,46 +612,52 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
         // Build set of all known declared symbol names for filtering noise
         const knownSymbols = new Set<string>([
-            ...allSymbols.variables.map(v => v.name.toLowerCase()),
-            ...allSymbols.comVariables.map(cv => cv.name.toLowerCase()),
-            ...allSymbols.constants.map(c => c.name.toLowerCase()),
-            ...allSymbols.functions.map(f => f.name.toLowerCase()),
+            ...allSymbols.variables.map((v) => v.name.toLowerCase()),
+            ...allSymbols.comVariables.map((cv) => cv.name.toLowerCase()),
+            ...allSymbols.constants.map((c) => c.name.toLowerCase()),
+            ...allSymbols.functions.map((f) => f.name.toLowerCase()),
         ]);
 
         // Pattern to find VBScript identifiers outside string literals
         const identPattern = /\b([a-zA-Z_]\w*)\b/g;
 
         // Pre-build the set of sql variable names lowercased for fast lookup
-        const sqlVarsLower = new Set([...sqlVars].map(v => v.toLowerCase()));
+        const sqlVarsLower = new Set([...sqlVars].map((v) => v.toLowerCase()));
 
         for (let li = 0; li < lineCount; li++) {
-            const lineText   = lineTextCache[li];
+            const lineText = lineTextCache[li];
             const lineOffset = lineOffsetCache[li];
-            const midOffset  = lineOffset + Math.floor(lineText.length / 2);
-            if (!inAsp(midOffset)) { continue; }
+            const midOffset = lineOffset + Math.floor(lineText.length / 2);
+            if (!inAsp(midOffset)) {
+                continue;
+            }
 
             const trimmedForComment988 = lineText.trimStart();
-            if (trimmedForComment988.startsWith("'") || /^rem\s/i.test(trimmedForComment988)) { continue; }
+            if (trimmedForComment988.startsWith("'") || /^rem\s/i.test(trimmedForComment988)) {
+                continue;
+            }
 
             // Strip string literals — replace with a sentinel char (§) so we can
             // distinguish "there was a string here" from pure whitespace gaps.
             // This lets us detect value-interpolation:  "..." & someVar & "..."
-            const strippedForIdents = lineText.replace(/"(?:[^"]|"")*"/g, m => '§' + ' '.repeat(m.length - 1));
+            const strippedForIdents = lineText.replace(/"(?:[^"]|"")*"/g, (m) => '§' + ' '.repeat(m.length - 1));
             // Strip VBScript comment
             const commentIdx = strippedForIdents.indexOf("'");
-            const activeText = commentIdx !== -1
-                ? strippedForIdents.substring(0, commentIdx)
-                : strippedForIdents;
+            const activeText = commentIdx !== -1 ? strippedForIdents.substring(0, commentIdx) : strippedForIdents;
 
             // Is this line a SQL variable assignment or self-append?
             const assignMatch = assignLinePattern.exec(activeText);
-            if (!assignMatch) { continue; }
+            if (!assignMatch) {
+                continue;
+            }
             const lhsVar = assignMatch[1].toLowerCase();
-            if (!sqlVarsLower.has(lhsVar)) { continue; }
+            if (!sqlVarsLower.has(lhsVar)) {
+                continue;
+            }
 
             // We're on a line that writes into a confirmed SQL variable.
             const rhsStart = lineText.indexOf(assignMatch[1]) + assignMatch[1].length;
-            const rhsText  = activeText.slice(rhsStart);
+            const rhsText = activeText.slice(rhsStart);
             const rhsOffset = rhsStart;
 
             // Helper: given a position in rhsText, scan backwards (skipping spaces)
@@ -575,12 +665,17 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             // and forwards to find if there's a string sentinel after the following &.
             // If BOTH sides are flanked by string literals → value interpolation → skip.
             function isValueInterpolation(startInRhs: number, endInRhs: number): boolean {
+                return true;
                 // Look left: skip whitespace, then expect either:
                 //   (a) & followed by § — direct string flanking: "sql" & var & "sql"
                 //   (b) ( or , — identifier is a function argument: Replace(var, ...) or f(x, var)
                 let l = startInRhs - 1;
-                while (l >= 0 && (rhsText[l] === ' ' || rhsText[l] === '\t')) { l--; }
-                if (l < 0) { return false; }
+                while (l >= 0 && (rhsText[l] === ' ' || rhsText[l] === '\t')) {
+                    l--;
+                }
+                if (l < 0) {
+                    return false;
+                }
 
                 let leftIsStr: boolean;
                 if (rhsText[l] === '(' || rhsText[l] === ',') {
@@ -588,7 +683,9 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                     leftIsStr = true;
                 } else if (rhsText[l] === '&') {
                     l--;
-                    while (l >= 0 && (rhsText[l] === ' ' || rhsText[l] === '\t')) { l--; }
+                    while (l >= 0 && (rhsText[l] === ' ' || rhsText[l] === '\t')) {
+                        l--;
+                    }
                     leftIsStr = l >= 0 && rhsText[l] === '§';
                 } else {
                     return false;
@@ -599,22 +696,32 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                 //   (b) ) or , — identifier is inside a function call
                 let r = endInRhs;
                 if (r < rhsText.length && rhsText[r] === '(') {
-                    let depth = 1; r++;
+                    let depth = 1;
+                    r++;
                     while (r < rhsText.length && depth > 0) {
-                        if (rhsText[r] === '(') { depth++; }
-                        else if (rhsText[r] === ')') { depth--; }
+                        if (rhsText[r] === '(') {
+                            depth++;
+                        } else if (rhsText[r] === ')') {
+                            depth--;
+                        }
                         r++;
                     }
                 }
-                while (r < rhsText.length && (rhsText[r] === ' ' || rhsText[r] === '\t')) { r++; }
-                if (r >= rhsText.length) { return false; }
+                while (r < rhsText.length && (rhsText[r] === ' ' || rhsText[r] === '\t')) {
+                    r++;
+                }
+                if (r >= rhsText.length) {
+                    return false;
+                }
 
                 let rightIsStr: boolean;
                 if (rhsText[r] === ')' || rhsText[r] === ',') {
                     rightIsStr = true;
                 } else if (rhsText[r] === '&') {
                     r++;
-                    while (r < rhsText.length && (rhsText[r] === ' ' || rhsText[r] === '\t')) { r++; }
+                    while (r < rhsText.length && (rhsText[r] === ' ' || rhsText[r] === '\t')) {
+                        r++;
+                    }
                     rightIsStr = r < rhsText.length && rhsText[r] === '§';
                 } else {
                     return false;
@@ -626,81 +733,94 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             identPattern.lastIndex = 0;
             let m2: RegExpExecArray | null;
             while ((m2 = identPattern.exec(rhsText)) !== null) {
-                const word    = m2[1];
+                const word = m2[1];
                 const wordKey = word.toLowerCase();
-                const col     = rhsOffset + m2.index;
+                const col = rhsOffset + m2.index;
 
                 // Skip: the LHS variable itself (self-append pattern)
-                if (wordKey === lhsVar) { continue; }
+                if (wordKey === lhsVar) {
+                    continue;
+                }
 
                 // Skip: VBScript language keywords
-                if (VBSCRIPT_KEYWORDS_SET.has(wordKey)) { continue; }
+                if (VBSCRIPT_KEYWORDS_SET.has(wordKey)) {
+                    continue;
+                }
 
                 // Skip: SQL keywords that appear as bare words in concat gaps
-                if (ALL_SQL_KEYWORDS.has(wordKey)) { continue; }
+                if (ALL_SQL_KEYWORDS.has(wordKey)) {
+                    continue;
+                }
 
                 // Skip: symbols we have no knowledge of — avoids noisy warnings
-                if (!knownSymbols.has(wordKey)) { continue; }
+                if (!knownSymbols.has(wordKey)) {
+                    continue;
+                }
 
                 // Check if next non-space char is '(' (function call)
                 const afterWord = rhsText.slice(m2.index + word.length).trimStart();
-                const isCall    = afterWord.startsWith('(');
+                const isCall = afterWord.startsWith('(');
 
                 // Skip: value interpolation — identifier flanked by string literals
                 // on both sides via & operators, e.g.  "sql" & Trim(x) & "sql"
                 // These are injecting VALUES into SQL, not SQL structure.
-                if (isValueInterpolation(m2.index, m2.index + word.length)) { continue; }
+                if (isValueInterpolation(m2.index, m2.index + word.length)) {
+                    continue;
+                }
 
                 if (isCall) {
                     // ── Function call in SQL context ──────────────────────────
-                    if (sqlFuncs.has(wordKey)) { continue; } // confirmed SQL — fine
+                    if (sqlFuncs.has(wordKey)) {
+                        continue;
+                    } // confirmed SQL — fine
 
-                    const range = new vscode.Range(
-                        new vscode.Position(li, col),
-                        new vscode.Position(li, col + word.length)
-                    );
+                    const range = new vscode.Range(new vscode.Position(li, col), new vscode.Position(li, col + word.length));
 
                     if (nonStrFuncs.has(wordKey)) {
-                        sqlDiagnostics.push(Object.assign(
-                            new vscode.Diagnostic(
-                                range,
-                                `'${word}()' does not appear to return a string. ` +
-                                `Concatenating it into a SQL variable may produce unexpected results.`,
-                                vscode.DiagnosticSeverity.Warning
+                        sqlDiagnostics.push(
+                            Object.assign(
+                                new vscode.Diagnostic(
+                                    range,
+                                    `'${word}()' does not appear to return a string. ` + `Concatenating it into a SQL variable may produce unexpected results.`,
+                                    vscode.DiagnosticSeverity.Warning,
+                                ),
+                                { source: 'ASP SQL' },
                             ),
-                            { source: 'ASP SQL' }
-                        ));
+                        );
                     } else {
-                        sqlDiagnostics.push(Object.assign(
-                            new vscode.Diagnostic(
-                                range,
-                                `'${word}()' is concatenated into SQL variable '${assignMatch[1]}' ` +
-                                `but its return value could not be confirmed as a SQL string. ` +
-                                `Verify that it returns valid SQL or a safe SQL fragment.`,
-                                vscode.DiagnosticSeverity.Warning
+                        sqlDiagnostics.push(
+                            Object.assign(
+                                new vscode.Diagnostic(
+                                    range,
+                                    `'${word}()' is concatenated into SQL variable '${assignMatch[1]}' ` +
+                                        `but its return value could not be confirmed as a SQL string. ` +
+                                        `Verify that it returns valid SQL or a safe SQL fragment.`,
+                                    vscode.DiagnosticSeverity.Warning,
+                                ),
+                                { source: 'ASP SQL' },
                             ),
-                            { source: 'ASP SQL' }
-                        ));
+                        );
                     }
                 } else {
                     // ── Variable reference in SQL context ─────────────────────
-                    if (sqlVarsLower.has(wordKey)) { continue; } // confirmed SQL var — fine
+                    if (sqlVarsLower.has(wordKey)) {
+                        continue;
+                    } // confirmed SQL var — fine
 
-                    const range = new vscode.Range(
-                        new vscode.Position(li, col),
-                        new vscode.Position(li, col + word.length)
-                    );
-                    sqlDiagnostics.push(Object.assign(
-                        new vscode.Diagnostic(
-                            range,
-                            `'${word}' is concatenated into SQL variable '${assignMatch[1]}' ` +
-                            `but has not been confirmed as a SQL variable or fragment. ` +
-                            `If this is intentional (e.g. a WHERE clause fragment), ` +
-                            `initialise '${word}' with a SQL keyword like WHERE or AND.`,
-                            vscode.DiagnosticSeverity.Warning
+                    const range = new vscode.Range(new vscode.Position(li, col), new vscode.Position(li, col + word.length));
+                    sqlDiagnostics.push(
+                        Object.assign(
+                            new vscode.Diagnostic(
+                                range,
+                                `'${word}' is concatenated into SQL variable '${assignMatch[1]}' ` +
+                                    `but has not been confirmed as a SQL variable or fragment. ` +
+                                    `If this is intentional (e.g. a WHERE clause fragment), ` +
+                                    `initialise '${word}' with a SQL keyword like WHERE or AND.`,
+                                vscode.DiagnosticSeverity.Warning,
+                            ),
+                            { source: 'ASP SQL' },
                         ),
-                        { source: 'ASP SQL' }
-                    ));
+                    );
                 }
             }
         }
@@ -710,23 +830,24 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
         // ── SQL string pre-pass ───────────────────────────────────────────────
         // Colour confirmed SQL strings and fragments appended to SQL variables.
-        const sqlStringLines    = new Map<number, Array<[number, number]>>();
+        const sqlStringLines = new Map<number, Array<[number, number]>>();
         const processedSqlLines = new Set<number>();
 
         // Colour a single string literal as SQL (for known SQL variable appends).
-        function emitFragmentAsSql(
-            li: number, lineText: string, colStart: number, colEnd: number
-        ): void {
+        function emitFragmentAsSql(li: number, lineText: string, colStart: number, colEnd: number): void {
             const len = colEnd - colStart;
             const omLine = new Int32Array(len).fill(li);
-            const omCol  = Int32Array.from({ length: len }, (_, i) => colStart + i);
+            const omCol = Int32Array.from({ length: len }, (_, i) => colStart + i);
             const group: SqlStringGroup = {
                 segments: [{ lineIndex: li, lineText, colStart, colEnd }],
                 stitched: lineText.substring(colStart, colEnd),
-                omLine, omCol,
+                omLine,
+                omCol,
             };
             emitSqlTokensForGroup(builder, group);
-            if (!sqlStringLines.has(li)) { sqlStringLines.set(li, []); }
+            if (!sqlStringLines.has(li)) {
+                sqlStringLines.set(li, []);
+            }
             sqlStringLines.get(li)!.push([colStart, colEnd]);
         }
 
@@ -734,42 +855,57 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         // The pre-pass uses it to detect lines that write into a confirmed SQL variable.
         // Single combined regex replaces N separate regexes tested per line.
         const sqlVarNames = [
-            ...[...sqlVars].map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-            ...[...sqlFuncs].map(f => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+            ...[...sqlVars].map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+            ...[...sqlFuncs].map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
         ];
-        const sqlVarPattern: RegExp | null = sqlVarNames.length > 0
-            ? new RegExp('^\\s*(?:' + sqlVarNames.join('|') + ')\\s*(?:=|&)', 'i')
-            : null;
+        const sqlVarPattern: RegExp | null = sqlVarNames.length > 0 ? new RegExp('^\\s*(?:' + sqlVarNames.join('|') + ')\\s*(?:=|&)', 'i') : null;
 
         for (let li = 0; li < lineCount; li++) {
-            if (processedSqlLines.has(li)) { continue; }
+            if (processedSqlLines.has(li)) {
+                continue;
+            }
 
-            const lineText   = lineTextCache[li];
+            const lineText = lineTextCache[li];
             const lineOffset = lineOffsetCache[li];
-            const midOffset  = lineOffset + Math.floor(lineText.length / 2);
-            if (!inAsp(midOffset)) { continue; }
+            const midOffset = lineOffset + Math.floor(lineText.length / 2);
+            if (!inAsp(midOffset)) {
+                continue;
+            }
 
             const trimmedForComment1173 = lineText.trimStart();
-            if (trimmedForComment1173.startsWith("'") || /^rem\s/i.test(trimmedForComment1173)) { continue; }
+            if (trimmedForComment1173.startsWith("'") || /^rem\s/i.test(trimmedForComment1173)) {
+                continue;
+            }
 
             let lineIsSqlAppend = false;
             if (sqlVarPattern !== null) {
-                let stripped2 = lineText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+                let stripped2 = lineText.replace(/"(?:[^"]|"")*"/g, (m) => ' '.repeat(m.length));
                 const cp2 = stripped2.indexOf("'");
-                if (cp2 !== -1) { stripped2 = stripped2.substring(0, cp2); }
+                if (cp2 !== -1) {
+                    stripped2 = stripped2.substring(0, cp2);
+                }
                 lineIsSqlAppend = sqlVarPattern.test(stripped2);
                 if (!lineIsSqlAppend) {
                     let checkLi = li - 1;
                     while (checkLi >= 0) {
                         const prevText = lineTextCache[checkLi];
                         const trimmed = prevText.trimEnd();
-                        if (!trimmed.endsWith('_')) { break; }
+                        if (!trimmed.endsWith('_')) {
+                            break;
+                        }
                         const beforeUnderscore = trimmed.slice(0, -1).trimEnd();
-                        if (!beforeUnderscore.endsWith('&') && !beforeUnderscore.endsWith('=')) { break; }
-                        let prevStripped = prevText.replace(/"(?:[^"]|"")*"/g, m => ' '.repeat(m.length));
+                        if (!beforeUnderscore.endsWith('&') && !beforeUnderscore.endsWith('=')) {
+                            break;
+                        }
+                        let prevStripped = prevText.replace(/"(?:[^"]|"")*"/g, (m) => ' '.repeat(m.length));
                         const prevCp = prevStripped.indexOf("'");
-                        if (prevCp !== -1) { prevStripped = prevStripped.substring(0, prevCp); }
-                        if (sqlVarPattern.test(prevStripped)) { lineIsSqlAppend = true; break; }
+                        if (prevCp !== -1) {
+                            prevStripped = prevStripped.substring(0, prevCp);
+                        }
+                        if (sqlVarPattern.test(prevStripped)) {
+                            lineIsSqlAppend = true;
+                            break;
+                        }
                         checkLi--;
                     }
                 }
@@ -777,7 +913,10 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
 
             let col = 0;
             while (col < lineText.length) {
-                if (lineText[col] !== '"') { col++; continue; }
+                if (lineText[col] !== '"') {
+                    col++;
+                    continue;
+                }
 
                 const group = extractSqlGroup(document, li, col);
 
@@ -796,9 +935,14 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                     const fragStart = col;
                     while (col < lineText.length) {
                         if (lineText[col] === '"') {
-                            if (col + 1 < lineText.length && lineText[col + 1] === '"') { col += 2; }
-                            else { break; }
-                        } else { col++; }
+                            if (col + 1 < lineText.length && lineText[col + 1] === '"') {
+                                col += 2;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            col++;
+                        }
                     }
                     if (col < lineText.length) {
                         emitFragmentAsSql(li, lineText, fragStart, col);
@@ -809,9 +953,15 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                     col++;
                     while (col < lineText.length) {
                         if (lineText[col] === '"') {
-                            if (col + 1 < lineText.length && lineText[col + 1] === '"') { col += 2; }
-                            else { col++; break; }
-                        } else { col++; }
+                            if (col + 1 < lineText.length && lineText[col + 1] === '"') {
+                                col += 2;
+                            } else {
+                                col++;
+                                break;
+                            }
+                        } else {
+                            col++;
+                        }
                     }
                 }
             }
@@ -824,22 +974,24 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         // coloured.  Instead, each token's actual document offset is checked
         // individually so mixed HTML/ASP lines are handled correctly.
         for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
-            const line       = lineTextCache[lineIndex];
+            const line = lineTextCache[lineIndex];
             const lineOffset = lineOffsetCache[lineIndex];
 
             // Fast pre-filter: skip lines that contain no <% at all.
-            if (!line.includes('<%') && !inAsp(lineOffset)) { continue; }
+            if (!line.includes('<%') && !inAsp(lineOffset)) {
+                continue;
+            }
 
             const trimmed = line.trimStart();
-            if (trimmed.startsWith("'") || /^rem\s/i.test(trimmed)) { continue; }
+            if (trimmed.startsWith("'") || /^rem\s/i.test(trimmed)) {
+                continue;
+            }
 
             // Strip VBScript string literals ("...") only when the opening quote
             // is itself inside an ASP block — this preserves HTML attribute values
             // like value="<%= x %>" and onclick="..." so tokens inside remain visible.
             // Replacement is always the same length (spaces) so string offsets stay valid.
-            let strippedLine = line.replace(/"[^"]*"/g, (m: string, offset: number) =>
-                inAsp(lineOffset + offset) ? ' '.repeat(m.length) : m
-            );
+            let strippedLine = line.replace(/"[^"]*"/g, (m: string, offset: number) => (inAsp(lineOffset + offset) ? ' '.repeat(m.length) : m));
             // Only treat ' as a VBScript comment marker when it sits inside an
             // ASP block — a ' in HTML (e.g. onclick="alert('<%= x %>')") is a JS
             // string delimiter and must not truncate the rest of the line.
@@ -859,33 +1011,38 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
             }
 
             const activeParams = lineParamSets.get(lineIndex);
-            const sqlRanges    = sqlStringLines.get(lineIndex);
+            const sqlRanges = sqlStringLines.get(lineIndex);
 
             const isFuncDeclaration = /^\s*(?:Public\s+|Private\s+)?(?:Function|Sub)\s+/i.test(line);
-            const isDimLine         = /^\s*(?:Dim|ReDim|Public|Private)\s+/i.test(line);
-            const isConstLine       = /^\s*(?:Public\s+|Private\s+)?Const\s+/i.test(line);
-            const isSetLine         = /^\s*Set\s+\w+\s*=/i.test(line);
+            const isDimLine = /^\s*(?:Dim|ReDim|Public|Private)\s+/i.test(line);
+            const isConstLine = /^\s*(?:Public\s+|Private\s+)?Const\s+/i.test(line);
+            const isSetLine = /^\s*Set\s+\w+\s*=/i.test(line);
 
             const wordPattern = /\b([a-zA-Z_]\w*)\b/g;
             let match: RegExpExecArray | null;
 
             while ((match = wordPattern.exec(strippedLine)) !== null) {
-                const word    = match[1];
+                const word = match[1];
                 const wordKey = word.toLowerCase();
-                const col     = match.index;
+                const col = match.index;
 
                 // Per-token zone check — only colour tokens that actually sit
                 // inside an ASP block, handles inline <%= %> in HTML attributes.
-                if (!inAsp(lineOffset + col)) { continue; }
+                if (!inAsp(lineOffset + col)) {
+                    continue;
+                }
 
-                if (sqlRanges?.some(([s, e]) => col >= s && col < e)) { continue; }
-                if (VBSCRIPT_KEYWORDS_SET.has(wordKey)) { continue; }
+                if (sqlRanges?.some(([s, e]) => col >= s && col < e)) {
+                    continue;
+                }
+                if (VBSCRIPT_KEYWORDS_SET.has(wordKey)) {
+                    continue;
+                }
 
                 if (funcMap.has(wordKey)) {
-                    const kind         = funcMap.get(wordKey)!;
-                    const tokenType    = kind === 'function' ? T_FUNCTION : T_NAMESPACE;
-                    const modifierMask = isFuncDeclaration && word === line.match(/(?:Function|Sub)\s+(\w+)/i)?.[1]
-                        ? M_DECLARATION : 0;
+                    const kind = funcMap.get(wordKey)!;
+                    const tokenType = kind === 'function' ? T_FUNCTION : T_NAMESPACE;
+                    const modifierMask = isFuncDeclaration && word === line.match(/(?:Function|Sub)\s+(\w+)/i)?.[1] ? M_DECLARATION : 0;
                     builder.push(lineIndex, col, word.length, tokenType, modifierMask);
                     continue;
                 }

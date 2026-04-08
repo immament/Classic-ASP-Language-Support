@@ -233,7 +233,11 @@
                     "aspLanguageSupport.prettier.tabWidth": {
                         "type": "number",
                         "default": 2,
-                        "enum": [2, 4, 8],
+                        "enum": [
+                            2,
+                            4,
+                            8
+                        ],
                         "description": "Spaces per HTML/CSS/JS indentation level — Prettier tabWidth"
                     },
                     "aspLanguageSupport.prettier.useTabs": {
@@ -259,14 +263,24 @@
                     "aspLanguageSupport.prettier.arrowParens": {
                         "type": "string",
                         "default": "always",
-                        "enum": ["always", "avoid"],
-                        "enumDescriptions": ["(x) => x", "x => x"],
+                        "enum": [
+                            "always",
+                            "avoid"
+                        ],
+                        "enumDescriptions": [
+                            "(x) => x",
+                            "x => x"
+                        ],
                         "description": "Parentheses around single arrow function parameters — Prettier arrowParens"
                     },
                     "aspLanguageSupport.prettier.trailingComma": {
                         "type": "string",
                         "default": "es5",
-                        "enum": ["none", "es5", "all"],
+                        "enum": [
+                            "none",
+                            "es5",
+                            "all"
+                        ],
                         "enumDescriptions": [
                             "No trailing commas",
                             "Trailing commas where valid in ES5 (objects, arrays)",
@@ -277,7 +291,12 @@
                     "aspLanguageSupport.prettier.endOfLine": {
                         "type": "string",
                         "default": "lf",
-                        "enum": ["lf", "crlf", "cr", "auto"],
+                        "enum": [
+                            "lf",
+                            "crlf",
+                            "cr",
+                            "auto"
+                        ],
                         "enumDescriptions": [
                             "\\n only (Linux / macOS)",
                             "\\r\\n (Windows)",
@@ -289,7 +308,11 @@
                     "aspLanguageSupport.prettier.htmlWhitespaceSensitivity": {
                         "type": "string",
                         "default": "css",
-                        "enum": ["css", "strict", "ignore"],
+                        "enum": [
+                            "css",
+                            "strict",
+                            "ignore"
+                        ],
                         "enumDescriptions": [
                             "Follow the CSS display property for whitespace decisions",
                             "All whitespace is significant",
@@ -342,7 +365,8 @@
         "watch": "tsc -watch -p ./",
         "pretest": "npm run compile && npm run lint",
         "lint": "eslint src --ext ts",
-        "test": "node ./out/test/runTest.js"
+        "test": "node ./out/test/runTest.js",
+        "pack": "vsce package"
     },
     "dependencies": {
         "prettier": "^3.8.1",
