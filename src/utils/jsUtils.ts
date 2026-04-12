@@ -47,11 +47,28 @@ function blankNonNewlines(s: string): string {
  * to avoid duplicating the same regex logic in each file.
  */
 export function getJsRanges(content: string): Array<{ start: number; end: number }> {
+    // Pre-compute ASP block extents so we can skip any <script> tag whose
+    // opening `<` falls inside a <% ... %> block (e.g. a VBScript string
+    // like Response.Write "<script>" & ...).  A tag inside an ASP block is
+    // never a real DOM script element — it's just text being output.
+    const aspRanges: Array<{ start: number; end: number }> = [];
+    const aspRe = /<%[\s\S]*?%>/g;
+    let aspM: RegExpExecArray | null;
+    while ((aspM = aspRe.exec(content)) !== null) {
+        aspRanges.push({ start: aspM.index, end: aspM.index + aspM[0].length });
+    }
+    const isInsideAsp = (offset: number): boolean =>
+        aspRanges.some(r => offset >= r.start && offset < r.end);
+
     const ranges: Array<{ start: number; end: number }> = [];
     const re = /<script(\s[^>]*)?>/gi;
     let m: RegExpExecArray | null;
 
     while ((m = re.exec(content)) !== null) {
+        // Skip <script> tags that appear inside ASP blocks — they are part of
+        // a VBScript string being written to the response, not real script elements.
+        if (isInsideAsp(m.index)) { continue; }
+
         const attrs  = m[1] ?? '';
         const tagEnd = m.index + m[0].length;
 
