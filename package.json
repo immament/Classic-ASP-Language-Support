@@ -2,7 +2,7 @@
     "name": "classic-asp-language-support",
     "displayName": "Classic ASP Language Support",
     "description": "Formatting, IntelliSense, Auto-Completion, and Syntax Highlighting for Classic ASP files with HTML, CSS, JavaScript, SQL, and VBScript.",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "icon": "images/icon.png",
     "publisher": "ashtonckj",
     "repository": {
@@ -47,8 +47,8 @@
             {
                 "id": "asp",
                 "aliases": [
-                    "ASP",
                     "Classic ASP",
+                    "ASP",
                     "asp"
                 ],
                 "extensions": [
@@ -332,22 +332,22 @@
                     },
                     "aspLanguageSupport.bracketLightColor": {
                         "type": "string",
-                        "default": "rgba(255, 100, 0, 0.2)",
+                        "default": "rgba(255, 100, 0, 0.15)",
                         "description": "ASP bracket <% %> color (light theme)"
                     },
                     "aspLanguageSupport.bracketDarkColor": {
                         "type": "string",
-                        "default": "rgba(0, 100, 255, 0.2)",
+                        "default": "rgba(0, 100, 255, 0.15)",
                         "description": "ASP bracket <% %> color (dark theme)"
                     },
                     "aspLanguageSupport.codeBlockLightColor": {
                         "type": "string",
-                        "default": "rgba(100, 100, 100, 0.1)",
+                        "default": "rgba(100, 100, 100, 0.04)",
                         "description": "ASP code block background (light theme)"
                     },
                     "aspLanguageSupport.codeBlockDarkColor": {
                         "type": "string",
-                        "default": "rgba(220, 220, 220, 0.1)",
+                        "default": "rgba(220, 220, 220, 0.04)",
                         "description": "ASP code block background (dark theme)"
                     }
                 }

@@ -5,7 +5,7 @@
 </h3>
 
 <p align="center">
-    <a href="https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support"><img alt="Version: 0.5.1" src="https://img.shields.io/badge/Version-0.5.1-b7bdf8?style=for-the-badge&labelColor=363a4f&logo=visual-studio-code&cacheSeconds=86400"/></a>
+    <a href="https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support"><img alt="Version: 0.5.2" src="https://img.shields.io/badge/Version-0.5.2-b7bdf8?style=for-the-badge&labelColor=363a4f&logo=visual-studio-code&cacheSeconds=86400"/></a>
     <a href="https://marketplace.visualstudio.com/items?itemName=ashtonckj.classic-asp-language-support"><img src="https://img.shields.io/visual-studio-marketplace/d/ashtonckj.classic-asp-language-support?style=for-the-badge&colorA=363a4f&colorB=8aadf4&cacheSeconds=3600" alt="Downloads"/></a>
     <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/issues"><img src="https://img.shields.io/github/issues/ashtonckj/Classic-ASP-Language-Support?colorA=363a4f&colorB=f5a97f&style=for-the-badge&cacheSeconds=3600"></a>
     <a href="https://github.com/ashtonckj/Classic-ASP-Language-Support/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-b7bdf8?style=for-the-badge&labelColor=363a4f&cacheSeconds=86400"/></a>
@@ -31,6 +31,7 @@
 | Trigger IntelliSense | `Ctrl + Space` or just start typing |
 | Insert snippet | Type prefix → `Tab` |
 | Go to definition | `F12` or `Ctrl + Click` |
+| Rename symbol | `F2` |
 | Follow include link | `Ctrl + Click` on the file path |
 
 ---
@@ -177,10 +178,10 @@
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `aspLanguageSupport.highlightAspRegions` | `true` | Highlight ASP regions |
-| `aspLanguageSupport.bracketLightColor` | `rgba(255, 100, 0, 0.2)` | Bracket colour (light theme) |
-| `aspLanguageSupport.bracketDarkColor` | `rgba(0, 100, 255, 0.2)` | Bracket colour (dark theme) |
-| `aspLanguageSupport.codeBlockLightColor` | `rgba(100, 100, 100, 0.1)` | Code block colour (light) |
-| `aspLanguageSupport.codeBlockDarkColor` | `rgba(220, 220, 220, 0.1)` | Code block colour (dark) |
+| `aspLanguageSupport.bracketLightColor` | `rgba(255, 100, 0, 0.15)` | Bracket colour (light theme) |
+| `aspLanguageSupport.bracketDarkColor` | `rgba(0, 100, 255, 0.15)` | Bracket colour (dark theme) |
+| `aspLanguageSupport.codeBlockLightColor` | `rgba(100, 100, 100, 0.04)` | Code block colour (light) |
+| `aspLanguageSupport.codeBlockDarkColor` | `rgba(220, 220, 220, 0.04)` | Code block colour (dark) |
 
 </details>
 
