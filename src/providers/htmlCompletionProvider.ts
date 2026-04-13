@@ -127,6 +127,51 @@ function findUnclosedTag(
     return null;
 }
 
+/**
+ * Returns true when the cursor (represented by textBefore — everything on the
+ * line up to the cursor) is inside a quoted HTML attribute value.
+ *
+ * The naive approach of doing `textBefore.lastIndexOf('<')` breaks when the
+ * user types a literal `<` inside an attribute value (e.g. href="<"), because
+ * that `<` becomes the new "last <" and the quote-state scan never sees the
+ * opening quote.
+ *
+ * The correct approach scans forward, tracking quote state, and records only
+ * `<` characters that appear *outside* quotes as potential tag openers.  Once
+ * we know the offset of the last real tag-opening `<`, we rescan from there to
+ * determine the current quote state.
+ */
+function isInsideAttrValue(textBefore: string): boolean {
+    let inQuote: string | null = null;
+    let lastTagOpen = -1;
+
+    for (let i = 0; i < textBefore.length; i++) {
+        const ch = textBefore[i];
+        if (inQuote) {
+            if (ch === inQuote) { inQuote = null; }
+        } else {
+            if (ch === '"' || ch === "'") { inQuote = ch; }
+            else if (ch === '<') {
+                const next = textBefore[i + 1];
+                if (next && /[a-zA-Z\/]/.test(next)) {
+                    lastTagOpen = i;
+                    inQuote = null; // entering a new tag context resets quote state
+                }
+            }
+        }
+    }
+
+    if (lastTagOpen === -1) { return false; }
+
+    // Rescan from the tag opener to get the final quote state
+    inQuote = null;
+    for (const ch of textBefore.slice(lastTagOpen)) {
+        if (!inQuote && (ch === '"' || ch === "'")) { inQuote = ch; }
+        else if (inQuote && ch === inQuote) { inQuote = null; }
+    }
+    return inQuote !== null;
+}
+
 // ── Completion provider ────────────────────────────────────────────────────
 
 export class HtmlCompletionProvider implements vscode.CompletionItemProvider {
@@ -151,7 +196,11 @@ export class HtmlCompletionProvider implements vscode.CompletionItemProvider {
         const typingClosingTag = /^([ \t]*)<\/$/.test(textBefore);
         const typingOpenAngle  = context.triggerCharacter === '<' || /^([ \t]*)<$/.test(textBefore);
 
-        if (typingClosingTag || typingOpenAngle) {
+        const insideAttrValue = isInsideAttrValue(textBefore);
+
+        // Never suggest closing tags when the cursor is inside a quoted attribute
+        // value — typing `<` in href="<" should not inject `</a>` into the value.
+        if (!insideAttrValue && (typingClosingTag || typingOpenAngle)) {
             const unclosed = findUnclosedTag(document, position);
 
             if (unclosed) {
@@ -201,19 +250,7 @@ export class HtmlCompletionProvider implements vscode.CompletionItemProvider {
         if (textBefore.match(/<(\w+)$/))      { return getTagCompletions(); }
 
         // ── Attribute suggestions ─────────────────────────────────────────────
-        // Guard: if the cursor is inside a quoted attribute VALUE (e.g. href="../")
-        // don't suggest attribute names — that's handled by other providers.
-        const insideAttrValue = (() => {
-            const lastOpen = textBefore.lastIndexOf('<');
-            if (lastOpen === -1) { return false; }
-            let inQuote: string | null = null;
-            for (const ch of textBefore.slice(lastOpen)) {
-                if (!inQuote && (ch === '"' || ch === "'")) { inQuote = ch; }
-                else if (inQuote && ch === inQuote) { inQuote = null; }
-            }
-            return inQuote !== null;
-        })();
-
+        // Guard: insideAttrValue is computed above, before the closing-tag block.
         if (!insideAttrValue && isInsideTagForAttributes(document, position)) {
             const tagName = getCurrentTagName(document, position);
             if (tagName) {

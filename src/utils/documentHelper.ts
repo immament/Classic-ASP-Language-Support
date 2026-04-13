@@ -109,6 +109,41 @@ export function isAfterOpenBracket(document: vscode.TextDocument, position: vsco
     return charBeforeCursor === '<';
 }
 
+/**
+ * Returns true when textBefore (everything on the line up to the cursor) is
+ * inside a quoted HTML attribute value.  Scans forward tracking quote state so
+ * that a literal `<` typed inside a value is never mistaken for a tag opener.
+ */
+export function isInsideAttrValueStr(textBefore: string): boolean {
+    let inQuote: string | null = null;
+    let lastTagOpen = -1;
+
+    for (let i = 0; i < textBefore.length; i++) {
+        const ch = textBefore[i];
+        if (inQuote) {
+            if (ch === inQuote) { inQuote = null; }
+        } else {
+            if (ch === '"' || ch === "'") { inQuote = ch; }
+            else if (ch === '<') {
+                const next = textBefore[i + 1];
+                if (next && /[a-zA-Z\/]/.test(next)) {
+                    lastTagOpen = i;
+                    inQuote = null;
+                }
+            }
+        }
+    }
+
+    if (lastTagOpen === -1) { return false; }
+
+    inQuote = null;
+    for (const ch of textBefore.slice(lastTagOpen)) {
+        if (!inQuote && (ch === '"' || ch === "'")) { inQuote = ch; }
+        else if (inQuote && ch === inQuote) { inQuote = null; }
+    }
+    return inQuote !== null;
+}
+
 // Check if cursor is inside a tag for attribute completion
 export function isInsideTagForAttributes(document: vscode.TextDocument, position: vscode.Position): boolean {
     const text = document.getText();

@@ -10,11 +10,13 @@
  */
 
 import * as path   from 'path';
+import * as fs     from 'fs';
 import * as ts     from 'typescript';
 import * as vscode from 'vscode';
 import { getZone } from './aspUtils';
 
 export const VIRTUAL_FILENAME = 'asp-embedded.js';
+export const ASP_DOM_TYPES_FILENAME = 'asp-dom.d.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // buildVirtualJsContent
@@ -45,11 +47,28 @@ function blankNonNewlines(s: string): string {
  * to avoid duplicating the same regex logic in each file.
  */
 export function getJsRanges(content: string): Array<{ start: number; end: number }> {
+    // Pre-compute ASP block extents so we can skip any <script> tag whose
+    // opening `<` falls inside a <% ... %> block (e.g. a VBScript string
+    // like Response.Write "<script>" & ...).  A tag inside an ASP block is
+    // never a real DOM script element — it's just text being output.
+    const aspRanges: Array<{ start: number; end: number }> = [];
+    const aspRe = /<%[\s\S]*?%>/g;
+    let aspM: RegExpExecArray | null;
+    while ((aspM = aspRe.exec(content)) !== null) {
+        aspRanges.push({ start: aspM.index, end: aspM.index + aspM[0].length });
+    }
+    const isInsideAsp = (offset: number): boolean =>
+        aspRanges.some(r => offset >= r.start && offset < r.end);
+
     const ranges: Array<{ start: number; end: number }> = [];
     const re = /<script(\s[^>]*)?>/gi;
     let m: RegExpExecArray | null;
 
     while ((m = re.exec(content)) !== null) {
+        // Skip <script> tags that appear inside ASP blocks — they are part of
+        // a VBScript string being written to the response, not real script elements.
+        if (isInsideAsp(m.index)) { continue; }
+
         const attrs  = m[1] ?? '';
         const tagEnd = m.index + m[0].length;
 
@@ -68,6 +87,45 @@ export function getJsRanges(content: string): Array<{ start: number; end: number
     return ranges;
 }
 
+/**
+ * Replaces a single ASP block with syntactically valid JS so the TS service
+ * never sees a bare hole in an expression context.
+ *
+ *   <%= expr %>  →  expression block: replace with numeric literal `0` padded
+ *                   with spaces so the total character count is preserved and
+ *                   offsets for surrounding code stay correct.
+ *                   e.g. `<%= foo %>` (10 chars) → `0         ` (10 chars)
+ *
+ *   <% code %>   →  statement block: replace with a JS block comment padded
+ *                   to the same length.
+ *                   e.g. `<% bar() %>` (11 chars) → `/*         *\/` — but we
+ *                   need exact length, so we pad the interior with spaces.
+ *                   Newlines inside the block are preserved so line numbers stay valid.
+ */
+function blankAspBlock(asp: string): string {
+    const isExpression = asp.startsWith('<%=');
+
+    if (isExpression) {
+        // Keep newlines so line numbers stay correct; replace everything else
+        // with spaces, then overwrite the very first non-newline char with '0'
+        // so the result is a valid numeric literal in any expression context.
+        const blanked = asp.replace(/[^\n]+/g, m => ' '.repeat(m.length));
+        // Find the index of the first space (first non-newline char) and put '0' there.
+        const firstSpace = blanked.indexOf(' ');
+        if (firstSpace === -1) { return blanked; }
+        return blanked.slice(0, firstSpace) + '0' + blanked.slice(firstSpace + 1);
+    }
+
+    // Statement block — a JS block comment is invisible to the parser.
+    // We must preserve the exact character count (newlines stay, rest → spaces)
+    // and wrap with /* ... */ so TS treats it as whitespace.
+    // The 4 syntax chars (/ * * /) replace the 4 ASP delimiters (<% and %>),
+    // so the interior length is unchanged.
+    return asp.replace(/[^\n]+/g, m => ' '.repeat(m.length))
+              .replace(/^\ {2}/, '/*')   // first 2 spaces → /*
+              .replace(/\ {2}$/, '*/');  // last  2 spaces → */
+}
+
 export function buildVirtualJsContent(
     content: string,
     offset:  number
@@ -80,7 +138,7 @@ export function buildVirtualJsContent(
     let prev = 0;
     for (const r of jsRanges) {
         out += blankNonNewlines(content.slice(prev, r.start));
-        out += content.slice(r.start, r.end).replace(/<%[\s\S]*?%>/g, asp => blankNonNewlines(asp));
+        out += content.slice(r.start, r.end).replace(/<%[\s\S]*?%>/g, asp => blankAspBlock(asp));
         prev = r.end;
     }
     out += blankNonNewlines(content.slice(prev));
@@ -119,31 +177,194 @@ export class JsLanguageService implements vscode.Disposable {
     private readonly _compilerOptions: ts.CompilerOptions;
     private          _content:         string = '';
     private          _version:         number = 0;
+    private readonly _aspDomTypes:     string;
 
-    constructor() {
+    constructor(extensionPath?: string) {
         this._compilerOptions = makeBrowserCompilerOptions();
         const libDir = path.dirname(ts.getDefaultLibFilePath(this._compilerOptions));
+
+        // Load custom DOM type definitions
+        // Try to load from extension path first, fall back to inline definitions
+        this._aspDomTypes = extensionPath
+            ? this.loadAspDomTypes(extensionPath)
+            : this.getInlineAspDomTypes();
+
         const self   = this;
 
         const host: ts.LanguageServiceHost = {
-            getScriptFileNames:     () => [VIRTUAL_FILENAME],
-            getScriptVersion:       (f) => f === VIRTUAL_FILENAME ? String(self._version) : '0',
+            getScriptFileNames:     () => [VIRTUAL_FILENAME, ASP_DOM_TYPES_FILENAME],
+            getScriptVersion:       (f) => {
+                if (f === VIRTUAL_FILENAME) return String(self._version);
+                if (f === ASP_DOM_TYPES_FILENAME) return '1';
+                return '0';
+            },
             getScriptSnapshot:      (f) => {
                 if (f === VIRTUAL_FILENAME) { return ts.ScriptSnapshot.fromString(self._content); }
+                if (f === ASP_DOM_TYPES_FILENAME) { return ts.ScriptSnapshot.fromString(self._aspDomTypes); }
                 const text = ts.sys.readFile(f);
                 return text !== undefined ? ts.ScriptSnapshot.fromString(text) : undefined;
             },
             getCompilationSettings: () => self._compilerOptions,
             getCurrentDirectory:    () => libDir,
             getDefaultLibFileName:  (opts) => ts.getDefaultLibFilePath(opts),
-            fileExists:             (f) => f === VIRTUAL_FILENAME || ts.sys.fileExists(f),
-            readFile:               (f) => f === VIRTUAL_FILENAME ? self._content : ts.sys.readFile(f),
+            fileExists:             (f) => {
+                if (f === VIRTUAL_FILENAME || f === ASP_DOM_TYPES_FILENAME) return true;
+                return ts.sys.fileExists(f);
+            },
+            readFile:               (f) => {
+                if (f === VIRTUAL_FILENAME) return self._content;
+                if (f === ASP_DOM_TYPES_FILENAME) return self._aspDomTypes;
+                return ts.sys.readFile(f);
+            },
             readDirectory:          ts.sys.readDirectory.bind(ts.sys),
             directoryExists:        ts.sys.directoryExists.bind(ts.sys),
             getDirectories:         ts.sys.getDirectories.bind(ts.sys),
         };
 
         this._service = ts.createLanguageService(host, ts.createDocumentRegistry());
+    }
+
+    private loadAspDomTypes(extensionPath: string): string {
+        try {
+            const typesPath = path.join(extensionPath, 'utils', 'asp-dom.d.ts');
+            if (fs.existsSync(typesPath)) {
+                return fs.readFileSync(typesPath, 'utf8');
+            }
+        } catch (err) {
+            console.warn('[ASP] Failed to load asp-dom.d.ts, using inline definitions:', err);
+        }
+        return this.getInlineAspDomTypes();
+    }
+
+    private getInlineAspDomTypes(): string {
+        return `
+    // Augment the standard HTMLElement interface directly so that Classic ASP
+    // inline scripts can call element-specific members (.submit(), .value,
+    // .selectedIndex, etc.) without type errors — exactly like plain .html files,
+    // where the HTML language service never enforces specific element subtypes.
+    // All members are optional so existing HTMLElement usage is unaffected.
+    // The Document interface is intentionally left untouched; getElementById /
+    // querySelector already return HTMLElement | null in lib.dom.d.ts.
+    interface HTMLElement {
+
+        // ── HTMLFormElement ───────────────────────────────────────────────────
+        submit?():          void;
+        reset?():           void;
+        checkValidity?():   boolean;
+        reportValidity?():  boolean;
+        elements?:          HTMLFormControlsCollection;
+        action?:            string;
+        method?:            string;
+        enctype?:           string;
+        encoding?:          string;
+        noValidate?:        boolean;
+
+        // ── HTMLInputElement / HTMLTextAreaElement ────────────────────────────
+        // value is string|number to stay compatible with HTMLLIElement /
+        // HTMLMeterElement / HTMLProgressElement which declare value as number.
+        value?:             string | number;
+        defaultValue?:      string;
+        checked?:           boolean;
+        defaultChecked?:    boolean;
+        indeterminate?:     boolean;
+        placeholder?:       string;
+        readOnly?:          boolean;
+        required?:          boolean;
+        maxLength?:         number;
+        minLength?:         number;
+        // max / min are string|number: string on input[type=date/number], number on HTMLMeterElement.
+        max?:               string | number;
+        min?:               string | number;
+        step?:              string;
+        pattern?:           string;
+        multiple?:          boolean;
+        accept?:            string;
+        files?:             FileList | null;
+        selectionStart?:    number | null;
+        selectionEnd?:      number | null;
+        // readonly: HTMLTextAreaElement and others declare both readonly.
+        readonly validity?:          ValidityState;
+        readonly validationMessage?: string;
+        select?():            void;
+        setSelectionRange?(start: number | null, end: number | null, direction?: string): void;
+        setCustomValidity?(error: string): void;
+
+        // ── HTMLSelectElement ─────────────────────────────────────────────────
+        selectedIndex?:   number;
+        // readonly HTMLCollectionOf<HTMLOptionElement>: matches HTMLDataListElement exactly.
+        // HTMLSelectElement.options (HTMLOptionsCollection) extends HTMLCollectionOf so it's compatible.
+        readonly options?:         HTMLCollectionOf<HTMLOptionElement>;
+        selectedOptions?: HTMLCollectionOf<HTMLOptionElement>;
+        // size is string|number: number on HTMLSelectElement, string on HTMLFontElement/HTMLHRElement.
+        size?:            string | number;
+
+        // ── HTMLOptionElement ─────────────────────────────────────────────────
+        selected?:  boolean;
+        label?:     string;
+        text?:      string;
+        index?:     number;
+
+        // ── HTMLImageElement ──────────────────────────────────────────────────
+        naturalWidth?:  number;
+        naturalHeight?: number;
+        complete?:      boolean;
+        currentSrc?:    string;
+
+        // ── HTMLTableElement ──────────────────────────────────────────────────
+        insertRow?(index?: number):  HTMLTableRowElement;
+        deleteRow?(index: number):   void;
+        createTHead?():              HTMLTableSectionElement;
+        createTFoot?():              HTMLTableSectionElement;
+        createTBody?():              HTMLTableSectionElement;
+        deleteTHead?():              void;
+        deleteTFoot?():              void;
+        // string | number | HTMLCollectionOf<...>:
+        //   HTMLFrameSetElement → string, HTMLTextAreaElement → number, HTMLTableElement → HTMLCollectionOf
+        rows?:                       string | number | HTMLCollectionOf<HTMLTableRowElement>;
+        tHead?:                      HTMLTableSectionElement | null;
+        tFoot?:                      HTMLTableSectionElement | null;
+        tBodies?:                    HTMLCollectionOf<HTMLTableSectionElement>;
+        caption?:                    HTMLTableCaptionElement | null;
+
+        // ── HTMLTableRowElement ───────────────────────────────────────────────
+        insertCell?(index?: number): HTMLTableCellElement;
+        deleteCell?(index: number):  void;
+        cells?:                      HTMLCollectionOf<HTMLTableCellElement>;
+        rowIndex?:                   number;
+        sectionRowIndex?:            number;
+
+        // ── HTMLTableCellElement ──────────────────────────────────────────────
+        colSpan?:   number;
+        rowSpan?:   number;
+        cellIndex?: number;
+        abbr?:      string;
+        scope?:     string;
+
+        // ── HTMLMediaElement (video / audio) ──────────────────────────────────
+        play?():    Promise<void>;
+        pause?():   void;
+        canPlayType?(type: string): CanPlayTypeResult;
+        paused?:    boolean;
+        ended?:     boolean;
+        volume?:    number;
+        currentTime?: number;
+        duration?:  number;
+
+        // ── HTMLCanvasElement ─────────────────────────────────────────────────
+        toDataURL?(type?: string, quality?: any): string;
+        toBlob?(callback: BlobCallback, type?: string, quality?: any): void;
+
+        // ── HTMLIFrameElement ─────────────────────────────────────────────────
+        contentDocument?: Document | null;
+        contentWindow?:   WindowProxy | null;
+
+        // ── HTMLButtonElement ─────────────────────────────────────────────────
+        formAction?:     string;
+        formMethod?:     string;
+        formTarget?:     string;
+        formNoValidate?: boolean;
+    }
+    `;
     }
 
     updateContent(content: string): void {
@@ -213,10 +434,15 @@ export class JsLanguageService implements vscode.Disposable {
 // Singleton
 // ─────────────────────────────────────────────────────────────────────────────
 let _service: JsLanguageService | undefined;
+let _extensionPath: string | undefined;
+
+export function initializeJsLanguageService(extensionPath: string): void {
+    _extensionPath = extensionPath;
+}
 
 export function getJsLanguageService(): JsLanguageService {
     if (!_service) {
-        try { _service = new JsLanguageService(); }
+        try { _service = new JsLanguageService(_extensionPath); }
         catch (err) {
             console.error('[ASP] Failed to create JsLanguageService:', err);
             throw err;
