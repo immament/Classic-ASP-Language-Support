@@ -525,7 +525,7 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
         const sqlDiagnostics: vscode.Diagnostic[] = [];
         const assignLinePattern = /^\s*([a-zA-Z_]\w*)\s*=\s*(.+)$/;
 
-        const enabled_autoformat = false;
+        const enabled_autoformat = true;
         if (enabled_autoformat) {
             for (const [varName3, assignments] of assignmentMap) {
                 if (!sqlVars.has(varName3)) {
@@ -597,7 +597,7 @@ export class AspSemanticTokensProvider implements vscode.DocumentSemanticTokensP
                             vscode.DiagnosticSeverity.Warning,
                         );
                         diag.source = 'ASP SQL';
-                        sqlDiagnostics.push(diag);
+                        // WARN: DJU: sqlDiagnostics.push(diag);
                         break;
                     }
                 }
